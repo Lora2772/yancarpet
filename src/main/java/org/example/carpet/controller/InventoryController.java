@@ -24,4 +24,14 @@ public class InventoryController {
     public InventoryService.InventoryStatus check(@RequestParam String sku) {
         return inventoryService.checkInventory(sku);
     }
+
+    @PostMapping("/reserve")
+    public boolean reserve(@RequestParam String sku, @RequestParam int quantity) {
+        return inventoryService.reserve(sku, quantity);
+    }
+
+    @PostMapping("/release")
+    public void release(@RequestParam String sku, @RequestParam int quantity) {
+        inventoryService.release(sku, quantity);
+    }
 }
