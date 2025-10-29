@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
  * This consumer shows how it *would* work in a real microservice world,
  * where Payment Service and Order Service are separate processes.
  */
-@Component
+//@Component
 @RequiredArgsConstructor
 public class OrderEventConsumer {
 
