@@ -58,6 +58,12 @@
             <version>4.1.2</version>
         </dependency>
 
+        <!-- Spring for Apache Kafka -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
         <!-- Optional: Swagger UI for API testing -->
         <dependency>
             <groupId>org.springdoc</groupId>

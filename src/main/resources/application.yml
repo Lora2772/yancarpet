@@ -11,7 +11,17 @@ spring:
       port: 27017
       database: carpetdb
 
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: carpet-group
+      auto-offset-reset: earliest
+    listener:
+      ack-mode: record
+
 # Logging
 logging:
   level:
     org.springframework.data.mongodb.core.MongoTemplate: DEBUG
+
+
