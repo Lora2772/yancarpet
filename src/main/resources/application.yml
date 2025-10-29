@@ -1,0 +1,17 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: carpet-backend
+
+  data:
+    mongodb:
+      host: localhost
+      port: 27017
+      database: carpetdb
+
+# Logging
+logging:
+  level:
+    org.springframework.data.mongodb.core.MongoTemplate: DEBUG
