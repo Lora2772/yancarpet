@@ -62,8 +62,8 @@ class ItemServiceTest {
                 .name("Red Wool Carpet")
                 .category("wool carpet")
                 .description("Luxury wool carpet for living room")
-                .colors(List.of("red"))
-                .roomTypes(List.of("living room", "home"))
+                .color("red")   // 或根据测试内容改成任意一个字符串
+                .roomType(List.of("living room", "home"))
                 .build();
 
         ItemDocument hotelTile = ItemDocument.builder()
@@ -71,8 +71,8 @@ class ItemServiceTest {
                 .name("Commercial Carpet Tile")
                 .category("carpet tiles")
                 .description("Durable, fire resistant hotel carpet tile")
-                .colors(List.of("gray"))
-                .roomTypes(List.of("hotel", "office"))
+                .color("red, blue")
+                .roomType(List.of("hotel", "office"))
                 .build();
 
         when(itemRepository.findAll())

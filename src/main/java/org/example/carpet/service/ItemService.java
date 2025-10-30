@@ -5,9 +5,7 @@ import org.example.carpet.model.ItemDocument;
 import org.example.carpet.repository.ItemRepository;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Locale;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -24,9 +22,7 @@ public class ItemService {
 
     // 创建或更新商品 (管理员用)
     public ItemDocument upsertItem(ItemDocument doc) {
-        // If SKU already exists, overwrite the doc with same SKU.
-        Optional<ItemDocument> existing = itemRepository.findBySku(doc.getSku());
-        existing.ifPresent(e -> doc.setId(e.getId())); // keep same _id if updating
+        itemRepository.findBySku(doc.getSku()).ifPresent(e -> doc.setId(e.getId())); // keep same _id if updating
         return itemRepository.save(doc);
     }
 
@@ -36,62 +32,88 @@ public class ItemService {
                 .orElseThrow(() -> new RuntimeException("Item not found for sku: " + sku));
     }
 
-    // 搜索 + 过滤
-    // 支持前端的:
-    // q          (任意关键词、sku、名称)
-    // category   (比如 wool carpet / carpet tiles / rugs / hotel carpet / factory carpet...)
-    // color      (red / blue / gray / ivory...)
-    // roomType   (living room / office / hotel / bathroom / bedroom...)
+    /**
+     * 搜索 + 过滤
+     * 支持:
+     *  q          任意关键词/sku/名称/描述/分类/房间
+     *  category   单值或逗号分隔
+     *  color      单值或逗号分隔（模型里是 String，也能匹配）
+     *  roomType   单值或逗号分隔（模型里是 List<String>）
+     */
     public List<ItemDocument> search(String q, String category, String color, String roomType) {
+        final List<String> qsCategories = splitCsv(category);
+        final List<String> qsColors    = splitCsv(color);
+        final List<String> qsRooms     = splitCsv(roomType);
 
         List<ItemDocument> all = itemRepository.findAll();
 
-        return all.stream()
-                .filter(item -> match(item, q, category, color, roomType))
-                .collect(Collectors.toList());
+        return all.stream().filter(item -> {
+            // 归一化文档里的字段：支持 String 或 List<String>
+            final String skuLc   = lc(item.getSku());
+            final String nameLc  = lc(item.getName());
+            final String descLc  = lc(item.getDescription());
+            final String catJoin = joinAny(item.getCategory());          // String
+            final String colJoin = joinAny(item.getColor());             // String
+            final String rtJoin  = joinAny(item.getRoomType());          // List<String>
+
+            // 关键字匹配
+            boolean okQ = isEmpty(q) ||
+                    skuLc.contains(lc(q)) ||
+                    nameLc.contains(lc(q)) ||
+                    descLc.contains(lc(q)) ||
+                    catJoin.contains(lc(q)) ||
+                    rtJoin.contains(lc(q));
+
+            // 过滤项匹配（支持多选）
+            boolean okCategory = qsCategories.isEmpty() || containsAny(catJoin, qsCategories);
+            boolean okColor    = qsColors.isEmpty()    || containsAny(colJoin, qsColors);
+            boolean okRoom     = qsRooms.isEmpty()     || containsAny(rtJoin, qsRooms);
+
+            return okQ && okCategory && okColor && okRoom;
+        }).collect(Collectors.toList());
     }
 
-    private boolean match(ItemDocument item,
-                          String q,
-                          String category,
-                          String color,
-                          String roomType) {
+    // ===== helpers =====
 
-        String skuLc = safe(item.getSku());
-        String nameLc = safe(item.getName());
-        String descLc = safe(item.getDescription());
-        String colorJoined = safeList(item.getColors());
-        String categoriesJoined = safe(item.getCategory()); // single category main tag
-        String roomTypesJoined = safeList(item.getRoomTypes());
-
-        boolean okQ = (q == null)
-                || skuLc.contains(q.toLowerCase(Locale.ROOT))
-                || nameLc.contains(q.toLowerCase(Locale.ROOT))
-                || descLc.contains(q.toLowerCase(Locale.ROOT))
-                || categoriesJoined.contains(q.toLowerCase(Locale.ROOT))
-                || roomTypesJoined.contains(q.toLowerCase(Locale.ROOT));
-
-        boolean okCategory = (category == null)
-                || categoriesJoined.contains(category.toLowerCase(Locale.ROOT));
-
-        boolean okColor = (color == null)
-                || colorJoined.contains(color.toLowerCase(Locale.ROOT));
-
-        boolean okRoomType = (roomType == null)
-                || roomTypesJoined.contains(roomType.toLowerCase(Locale.ROOT));
-
-        return okQ && okCategory && okColor && okRoomType;
-    }
-
-    private String safe(String s) {
+    private static String lc(String s) {
         return s == null ? "" : s.toLowerCase(Locale.ROOT);
     }
 
-    private String safeList(List<String> list) {
-        if (list == null) return "";
-        return list.stream()
-                .filter(v -> v != null)
-                .map(v -> v.toLowerCase(Locale.ROOT))
-                .collect(Collectors.joining(" "));
+    private static boolean isEmpty(String s) {
+        return s == null || s.isBlank();
+    }
+
+    /** 支持 String 或 List<String>，统一拼成小写的空格分隔字符串，便于 contains */
+    private static String joinAny(Object v) {
+        if (v == null) return "";
+        if (v instanceof String) {
+            return lc((String) v);
+        }
+        if (v instanceof Collection<?>) {
+            return ((Collection<?>) v).stream()
+                    .filter(Objects::nonNull)
+                    .map(o -> lc(String.valueOf(o)))
+                    .collect(Collectors.joining(" "));
+        }
+        return lc(String.valueOf(v));
+    }
+
+    /** 解析逗号分隔的查询参数，转成小写列表（空/全空白返回空列表） */
+    private static List<String> splitCsv(String s) {
+        if (isEmpty(s)) return Collections.emptyList();
+        return Arrays.stream(s.split(","))
+                .map(String::trim)
+                .filter(t -> !t.isEmpty())
+                .map(t -> t.toLowerCase(Locale.ROOT))
+                .collect(Collectors.toList());
+    }
+
+    /** haystack 是 joinAny 的结果；needles 是已小写的词列表，只要有一个出现就匹配 */
+    private static boolean containsAny(String haystack, List<String> needles) {
+        if (haystack.isEmpty() || needles.isEmpty()) return true;
+        for (String n : needles) {
+            if (haystack.contains(n)) return true;
+        }
+        return false;
     }
 }

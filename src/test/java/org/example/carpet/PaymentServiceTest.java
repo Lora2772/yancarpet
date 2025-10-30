@@ -1,5 +1,6 @@
 package org.example.carpet.service;
 
+import org.example.carpet.kafka.PaymentEventProducer;
 import org.example.carpet.model.OrderDocument;
 import org.example.carpet.model.PaymentRecord;
 import org.example.carpet.repository.PaymentRepository;
@@ -15,18 +16,9 @@ import static org.mockito.Mockito.*;
 
 /**
  * Tests payment flow:
- *  - submitPayment with CARD marks payment SUCCESS
- *  - submitPayment notifies orderService to mark order PAID
- *  - getPaymentStatus returns payment record by orderId
- *
- *  submitPayment("CARD")：
- * 创建一条 PaymentRecord 状态 "PENDING"
- * 立即把它标记为 "SUCCESS"
- * 调用 orderService.markPaid(orderId)，订单进入 "PAID" 状态
- *
- *  支付服务不只是写“我收钱了”
- * 支付服务还要通知订单服务更新状态
- * 也就是 Payment → Order 的业务耦合，后面就可以被替换成 Kafka 异步事件（PaymentSucceeded）。
+ * - submitPayment(): creates record, marks SUCCESS for CARD, marks order PAID, emits event
+ * - refundPayment(): creates refund record, marks order REFUNDED
+ * - getPaymentStatus(): reads from repo
  */
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceTest {
@@ -37,12 +29,15 @@ class PaymentServiceTest {
     @Mock
     OrderService orderService;
 
+    @Mock
+    PaymentEventProducer paymentEventProducer;
+
     @InjectMocks
     PaymentService paymentService;
 
     @Test
     void submitPayment_cardShouldMarkSuccessAndMarkOrderPaid() {
-        // fake order state change
+        // mock orderService.markPaid
         when(orderService.markPaid("ORD-123"))
                 .thenReturn(
                         OrderDocument.builder()
@@ -51,7 +46,7 @@ class PaymentServiceTest {
                                 .build()
                 );
 
-        // When saving PaymentRecord, just return the argument (simulate Mongo save())
+        // paymentRepository.save(...) should just echo back what we pass in
         when(paymentRepository.save(any(PaymentRecord.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
@@ -66,25 +61,64 @@ class PaymentServiceTest {
         assertEquals(499.00, rec.getAmount());
         assertEquals("SUCCESS", rec.getStatus());
 
-        // make sure we told OrderService to mark it paid
+        // verify PAID status update + event emission
         verify(orderService).markPaid("ORD-123");
+        verify(paymentEventProducer).publishPaymentSucceeded("ORD-123", 499.00);
+    }
+
+    @Test
+    void refundPayment_shouldCreateRefundRecordAndMarkOrderRefunded() {
+        // Set up an existing successful payment
+        PaymentRecord paidRecord = PaymentRecord.builder()
+                .orderId("ORD-xyz")
+                .amount(200.00)
+                .paymentMethod("CARD")
+                .status("SUCCESS")
+                .build();
+
+        when(paymentRepository.findByOrderId("ORD-xyz"))
+                .thenReturn(Optional.of(paidRecord));
+
+        // paymentRepository.save(...) echo back argument
+        when(paymentRepository.save(any(PaymentRecord.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        // Mock loading + saving order
+        OrderDocument orderDoc = OrderDocument.builder()
+                .orderId("ORD-xyz")
+                .status("PAID")
+                .build();
+
+        when(orderService.getOrderByOrderId("ORD-xyz")).thenReturn(orderDoc);
+        when(orderService.saveDirect(any(OrderDocument.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        PaymentRecord refund = paymentService.refundPayment("ORD-xyz", "customer_cancel");
+
+        assertEquals("ORD-xyz", refund.getOrderId());
+        assertEquals("REFUND_SUCCESS", refund.getStatus());
+        assertTrue(refund.getAmount() < 0, "refund amount should be negative");
+
+        // After refund, order should be REFUNDED
+        assertEquals("REFUNDED", orderDoc.getStatus());
+        verify(orderService).saveDirect(orderDoc);
     }
 
     @Test
     void getPaymentStatus_shouldReturnRecordFromRepo() {
         PaymentRecord mock = PaymentRecord.builder()
-                .orderId("ORD-xyz")
+                .orderId("ORD-abc")
                 .status("SUCCESS")
                 .paymentMethod("CARD")
                 .amount(100.00)
                 .build();
 
-        when(paymentRepository.findByOrderId("ORD-xyz"))
+        when(paymentRepository.findByOrderId("ORD-abc"))
                 .thenReturn(Optional.of(mock));
 
-        PaymentRecord out = paymentService.getPaymentStatus("ORD-xyz");
+        PaymentRecord out = paymentService.getPaymentStatus("ORD-abc");
 
-        assertEquals("ORD-xyz", out.getOrderId());
+        assertEquals("ORD-abc", out.getOrderId());
         assertEquals("SUCCESS", out.getStatus());
         assertEquals("CARD", out.getPaymentMethod());
     }

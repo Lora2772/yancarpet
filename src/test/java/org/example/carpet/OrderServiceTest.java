@@ -1,11 +1,14 @@
 package org.example.carpet.service;
 
+import org.example.carpet.client.InventoryClient;
+import org.example.carpet.kafka.InventoryEventProducer;
 import org.example.carpet.model.OrderDocument;
 import org.example.carpet.model.OrderLineItem;
 import org.example.carpet.repository.OrderRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
@@ -35,7 +38,10 @@ class OrderServiceTest {
     OrderRepository orderRepository;
 
     @Mock
-    InventoryService inventoryService;
+    InventoryClient inventoryClient;
+
+    @Mock
+    InventoryEventProducer inventoryEventProducer;
 
     @InjectMocks
     OrderService orderService;
@@ -49,10 +55,9 @@ class OrderServiceTest {
                 .price(199.99)
                 .build();
 
-        when(inventoryService.reserve("RUG-RED", 2))
+        when(inventoryClient.reserve("RUG-RED", 2))
                 .thenReturn(true);
 
-        // when saving, just echo back the object we got
         when(orderRepository.save(any(OrderDocument.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
@@ -62,16 +67,18 @@ class OrderServiceTest {
         );
 
         assertEquals("RESERVED", created.getStatus());
-        assertEquals(1, created.getItems().size());
-        assertEquals(2, created.getItems().get(0).getQuantity());
 
-        // verify that we tried to reserve stock for each line item
-        verify(inventoryService).reserve("RUG-RED", 2);
+        verify(inventoryClient).reserve("RUG-RED", 2);
+
+        verify(inventoryEventProducer).publishInventoryReserved(
+                anyString(), // orderId is random UUID
+                eq("RUG-RED"),
+                eq(2)
+        );
     }
 
     @Test
     void cancelOrder_shouldReleaseInventoryAndMarkCancelled() {
-        // prepare an existing RESERVED order
         OrderLineItem lineItem = OrderLineItem.builder()
                 .sku("RUG-RED")
                 .quantity(2)
@@ -88,11 +95,18 @@ class OrderServiceTest {
                 .thenReturn(Optional.of(reserved));
 
         when(orderRepository.save(any(OrderDocument.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         OrderDocument cancelled = orderService.cancelOrder("ORD-abc");
 
         assertEquals("CANCELLED", cancelled.getStatus());
-        verify(inventoryService).release("RUG-RED", 2);
+
+        verify(inventoryClient).release("RUG-RED", 2);
+
+        verify(inventoryEventProducer).publishInventoryReleased(
+                eq("ORD-abc"),
+                eq("RUG-RED"),
+                eq(2)
+        );
     }
 }

@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   app:
-    build: .
+    build: src/main/java/org/example/carpet
     container_name: carpet-app
     depends_on:
       - mongo
@@ -27,6 +27,17 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+
+  postgres:
+    image: postgres:16
+    container_name: carpet-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: carpet
+      POSTGRES_PASSWORD: carpetpw
+      POSTGRES_DB: ledgerdb
+    ports:
+      - "5432:5432"
 
   zookeeper:
     image: bitnami/zookeeper:3.9

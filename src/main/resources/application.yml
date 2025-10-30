@@ -11,6 +11,17 @@ spring:
       port: 27017
       database: carpetdb
 
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ledgerdb
+    username: carpet
+    password: secret
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
   kafka:
     bootstrap-servers: localhost:9092
     consumer:

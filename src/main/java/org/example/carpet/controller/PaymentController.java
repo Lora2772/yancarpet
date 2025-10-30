@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
  *   第一次返回 PENDING + 二维码URL，
  *   前端扫码后再回调我们把它标成 SUCCESS，最后标记订单为 PAID。
  */
+
 @RestController
 @RequestMapping("/payments")
 @RequiredArgsConstructor
@@ -29,6 +30,7 @@ public class PaymentController {
 
     private final PaymentService paymentService;
 
+    // 用户点击 "Pay Now"
     @PostMapping("/submit")
     public PaymentRecord submitPayment(@RequestBody SubmitPaymentRequest request) {
         return paymentService.submitPayment(
@@ -38,15 +40,31 @@ public class PaymentController {
         );
     }
 
+    // 查询支付/退款状态
     @GetMapping("/status/{orderId}")
     public PaymentRecord getPaymentStatus(@PathVariable String orderId) {
         return paymentService.getPaymentStatus(orderId);
+    }
+
+    // Reverse Payment / Refund
+    @PostMapping("/refund")
+    public PaymentRecord refund(@RequestBody RefundRequest request) {
+        return paymentService.refundPayment(
+                request.getOrderId(),
+                request.getReason()
+        );
     }
 
     @Data
     public static class SubmitPaymentRequest {
         private String orderId;
         private String paymentMethod; // "CARD", "WECHAT_QR", "ALIPAY_QR"
-        private double amount;        // total checkout amount
+        private double amount;
+    }
+
+    @Data
+    public static class RefundRequest {
+        private String orderId;
+        private String reason;
     }
 }

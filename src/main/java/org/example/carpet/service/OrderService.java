@@ -118,4 +118,11 @@ public class OrderService {
         order.setUpdatedAt(LocalDateTime.now());
         return orderRepository.save(order);
     }
+
+    // allow other services (like PaymentService.refundPayment) to persist status changes
+    public OrderDocument saveDirect(OrderDocument order) {
+        order.setUpdatedAt(java.time.LocalDateTime.now());
+        return orderRepository.save(order);
+    }
+
 }

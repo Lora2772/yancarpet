@@ -1,0 +1,38 @@
+[
+  {
+    "sku": "rug1",
+    "availableQuantity": 999,
+    "warehouse": "CN_SHANGHAI",
+    "fulfillmentType": "STOCK"
+  },
+  {
+    "sku": "rug2",
+    "availableQuantity": 999,
+    "warehouse": "CN_SHANGHAI",
+    "fulfillmentType": "STOCK"
+  },
+  {
+    "sku": "tiles1",
+    "availableQuantity": 999,
+    "warehouse": "CN_SHANGHAI",
+    "fulfillmentType": "STOCK"
+  },
+  {
+    "sku": "doormat1",
+    "availableQuantity": 999,
+    "warehouse": "CN_SHANGHAI",
+    "fulfillmentType": "STOCK"
+  },
+  {
+    "sku": "walltowall1",
+    "availableQuantity": 999,
+    "warehouse": "CN_SHANGHAI",
+    "fulfillmentType": "STOCK"
+  },
+  {
+    "sku": "axminster1",
+    "availableQuantity": 999,
+    "warehouse": "CN_SHANGHAI",
+    "fulfillmentType": "STOCK"
+  }
+]
