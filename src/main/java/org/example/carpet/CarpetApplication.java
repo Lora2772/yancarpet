@@ -8,12 +8,7 @@ import org.springframework.boot.autoconfigure.data.cassandra.CassandraRepositori
 import org.springframework.boot.autoconfigure.data.cassandra.CassandraReactiveRepositoriesAutoConfiguration;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
-@SpringBootApplication(exclude = {
-        CassandraAutoConfiguration.class,
-        CassandraDataAutoConfiguration.class,
-        CassandraRepositoriesAutoConfiguration.class,
-        CassandraReactiveRepositoriesAutoConfiguration.class
-})
+@SpringBootApplication()
 @EnableFeignClients(basePackages = "org.example.carpet.client")
 public class CarpetApplication {
     public static void main(String[] args) {

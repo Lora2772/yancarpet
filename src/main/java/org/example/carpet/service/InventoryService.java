@@ -2,7 +2,13 @@ package org.example.carpet.service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.carpet.repository.InventoryRepository;
+import org.springframework.data.cassandra.core.CassandraOperations;
+import org.springframework.data.cassandra.core.CassandraTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.data.cassandra.core.CassandraOperations;
+
+
+import java.time.Duration;
 
 /**
  * Handles stock availability and shipping promise.
@@ -14,6 +20,9 @@ import org.springframework.stereotype.Service;
 public class InventoryService {
 
     private final InventoryRepository inventoryRepository;
+
+    // === Cassandra: 使用 CassandraTemplate 直写预留（行级 TTL） ===
+    private final CassandraTemplate cassandraTemplate;
 
     // 查询库存 + 返回承诺运输时间
     public InventoryStatus checkInventory(String sku) {
@@ -35,6 +44,44 @@ public class InventoryService {
     // 释放库存（订单取消 / 支付失败）
     public void release(String sku, int quantity) {
         inventoryRepository.release(sku, quantity);
+    }
+
+    // ----------------------------------------------------------------------
+    // Cassandra 预留记录（短寿命、写多读少；TTL 到期自动过期）
+    // ----------------------------------------------------------------------
+
+    /**
+     * Cassandra（预留记录，双写两张查询模型表）:
+     *  - inventory_reservations_by_sku (sku, reserved_at_ts DESC, order_id, qty) USING TTL ?
+     *  - inventory_reservations_by_order (order_id, reserved_at_ts DESC, sku, qty) USING TTL ?
+     */
+    public void recordReservationCassandra(String orderId, String sku, int qty, Duration ttl) {
+        long now = System.currentTimeMillis();
+        int ttlSec = (int) Math.max(1, ttl.getSeconds());
+
+        // by_sku
+        cassandraTemplate.getCqlOperations().execute(
+                "INSERT INTO inventory_reservations_by_sku (sku, reserved_at_ts, order_id, qty) " +
+                        "VALUES (?, ?, ?, ?) USING TTL ?",
+                sku, now, orderId, qty, ttlSec
+        );
+
+        // by_order
+        cassandraTemplate.getCqlOperations().execute(
+                "INSERT INTO inventory_reservations_by_order (order_id, reserved_at_ts, sku, qty) " +
+                        "VALUES (?, ?, ?, ?) USING TTL ?",
+                orderId, now, sku, qty, ttlSec
+        );
+    }
+
+    /**
+     * （可选）Cassandra：按主键删除一条预留（一般不需要，交由 TTL 过期）
+     */
+    public void deleteReservationCassandraBySku(String sku, long reservedAtTs) {
+        cassandraTemplate.getCqlOperations().execute(
+                "DELETE FROM inventory_reservations_by_sku WHERE sku = ? AND reserved_at_ts = ?",
+                sku, reservedAtTs
+        );
     }
 
     // 内部使用的结构体（不放 dto 包是因为这是 service <-> controller 的中间数据）

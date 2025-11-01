@@ -1,11 +1,10 @@
 package org.example.carpet.config;
 
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 import org.springframework.data.cassandra.repository.config.EnableCassandraRepositories;
 
 @Configuration
-@Profile("cassandra") // 只有激活 cassandra profile 才启用仓库扫描
-@EnableCassandraRepositories(basePackages = "org.example.carpet.repository.cassandra")
+@EnableCassandraRepositories(basePackages = "org.example.carpet.cassandra.repos")
 public class CassandraRepoConfig {
+    // 不要加 @Profile，避免因为未激活 profile 导致不生效
 }

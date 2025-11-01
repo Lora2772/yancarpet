@@ -5,25 +5,33 @@ spring:
   application:
     name: carpet-backend
 
-  autoconfigure:
-    exclude:
-      - org.springframework.boot.autoconfigure.cassandra.CassandraAutoConfiguration
-      - org.springframework.boot.autoconfigure.data.cassandra.CassandraDataAutoConfiguration
-      - org.springframework.boot.autoconfigure.data.cassandra.CassandraRepositoriesAutoConfiguration
-      - org.springframework.boot.autoconfigure.data.cassandra.CassandraReactiveRepositoriesAutoConfiguration
-
+  # Mongo（你日志里实际在用）
   data:
     mongodb:
       host: localhost
       port: 27017
       database: carpetdb
 
-  datasource:
-    url: jdbc:postgresql://localhost:5432/carpetdb
-    username: carpet
-    password: secret
-    driver-class-name: org.postgresql.Driver
+  # Kafka：加上 admin（自动创建 topic）和合理超时，避免卡请求
+  kafka:
+    bootstrap-servers: localhost:9092
+    admin:
+      fail-fast: true
+    producer:
+      # 避免阻塞请求线程：不要使用 send().get()；以下超时缩短失败感知时间
+      properties:
+        request.timeout.ms: 3000
+        delivery.timeout.ms: 3000
+        max.block.ms: 2000
+    consumer:
+      group-id: carpet-group
+      auto-offset-reset: earliest
+    listener:
+      ack-mode: record
+
+  # 如果“当前阶段”不用 JPA/Postgres，建议先关掉 open-in-view（或直接移除JPA依赖，见下文POM）
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: update
     show-sql: true
@@ -31,17 +39,30 @@ spring:
       hibernate:
         format_sql: true
 
-  kafka:
-    bootstrap-servers: localhost:9092
-    consumer:
-      group-id: carpet-group
-      auto-offset-reset: earliest
-    listener:
-      ack-mode: record
+  cassandra:
+    contact-points: localhost
+    port: 9042
+    keyspace-name: carpet_ks
+    local-datacenter: datacenter1
+    schema-action: none   # 推荐 none；用 CQL 脚本建表
 
-# Logging
+  # 如需 Postgres，再开启 datasource；不用就先注释掉这块
+  datasource:
+    url: jdbc:postgresql://localhost:5432/carpetdb
+    username: carpet
+    password: secret
+    driver-class-name: org.postgresql.Driver
+
 logging:
   level:
-    org.springframework.data.mongodb.core.MongoTemplate: DEBUG
+    org.springframework.web: INFO
+    org.springframework.data.mongodb.core.MongoTemplate: INFO
+    org.springframework.security: INFO
+    org.example.carpet: DEBUG
+    org.apache.kafka.clients.admin: WARN
+    org.apache.kafka.clients.Metadata: WARN
 
-
+app:
+  jwt:
+    secret: change-me-please
+    ttlSeconds: 86400

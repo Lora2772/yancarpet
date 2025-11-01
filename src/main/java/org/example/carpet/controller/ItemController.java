@@ -1,5 +1,6 @@
 package org.example.carpet.controller;
 
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.example.carpet.model.ItemDocument;
 import org.example.carpet.service.ItemService;
@@ -7,18 +8,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * 商品目录 / 搜索 / 定制页信息
- *
- * - POST /items            管理员录入或更新一个SKU
- * - GET  /items            列表（可带同样的 query 参数，等同于 /items/search）
- * - GET  /items/{sku}      用户查看商品详情页
- * - GET  /items/search     用户在前端搜索框+filter检索
- */
-@CrossOrigin(
-        origins = { "http://localhost:5173", "http://127.0.0.1:5173" },
-        allowCredentials = "true"   // 如果前端带了 cookies/凭证
-)
 @RestController
 @RequestMapping("/items")
 @RequiredArgsConstructor
@@ -26,38 +15,66 @@ public class ItemController {
 
     private final ItemService itemService;
 
-    // 管理员添加/更新一个商品
+    // ---- 管理员：新增/更新商品（演示可暂时对外开放） ----
     @PostMapping
-    public ItemDocument upsertItem(@RequestBody ItemDocument request) {
-        return itemService.upsertItem(request);
+    public ItemDocument upsert(@RequestBody ItemDocument doc) {
+        return itemService.upsertItem(doc);
     }
 
-    // ✅ 新增：列表（与 /items/search 相同的查询参数，方便前端直接用 /items）
-    // 例如：/items?q=wool&category=hotel%20carpet&color=red&roomType=living%20room
+    // ---- 列表（简单返回全部；如果你有分页，可换成分页返回） ----
     @GetMapping
-    public List<ItemDocument> listItems(
-            @RequestParam(required = false) String q,
-            @RequestParam(required = false) String category,
-            @RequestParam(required = false) String color,
-            @RequestParam(required = false) String roomType
-    ) {
-        return itemService.search(q, category, color, roomType);
+    public List<ItemDocument> list() {
+        // 你也可以在 service 里做分页/排序，这里简化为 findAll
+        return itemService.search(null, null, null, null);
     }
 
-    // 商品详情
+    // ---- 详情 ----
     @GetMapping("/{sku}")
-    public ItemDocument getItem(@PathVariable String sku) {
+    public ItemDocument detail(@PathVariable String sku) {
         return itemService.getBySku(sku);
     }
 
-    // 搜索 + filter（保留老路径，兼容前端两种写法）
+    // ---- 搜索/过滤 ----
+    // 例：/items/search?q=wool&category=rug&color=blue&roomType=living room
     @GetMapping("/search")
-    public List<ItemDocument> searchItems(
+    public List<ItemDocument> search(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String color,
-            @RequestParam(required = false) String roomType
+            @RequestParam(required = false, name = "roomType") String roomType
     ) {
         return itemService.search(q, category, color, roomType);
+    }
+
+    // ---- 推荐（基于某个 SKU 的相似项）----
+    // 例：/items/{sku}/recommendations?limit=8
+    @GetMapping("/{sku}/recommendations")
+    public List<ItemDocument> recommendBySku(
+            @PathVariable String sku,
+            @RequestParam(defaultValue = "8") int limit
+    ) {
+        return itemService.recommendBySku(sku, limit);
+    }
+
+    // ---- 推荐（显式传入标签）----
+    // 例：/items/recommendations?roomType=living%20room&keywords=wool,handmade&limit=8
+    @GetMapping("/recommendations")
+    public List<ItemDocument> recommendByTags(
+            @RequestParam(required = false, name = "roomType") String roomType,
+            @RequestParam(required = false) String keywords,
+            @RequestParam(defaultValue = "8") int limit
+    ) {
+        RecommendTags req = new RecommendTags();
+        req.setRoomType(roomType);
+        req.setKeywords(keywords);
+        req.setLimit(limit);
+        return itemService.recommendByTags(req.getRoomType(), req.getKeywords(), req.getLimit());
+    }
+
+    @Data
+    public static class RecommendTags {
+        private String roomType;   // 逗号分隔或单值均可，service 内会拆分
+        private String keywords;   // 逗号分隔或单值均可
+        private int    limit = 8;
     }
 }

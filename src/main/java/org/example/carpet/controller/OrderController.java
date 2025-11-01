@@ -5,22 +5,22 @@ import lombok.RequiredArgsConstructor;
 import org.example.carpet.model.OrderDocument;
 import org.example.carpet.model.OrderLineItem;
 import org.example.carpet.service.OrderService;
+import org.springframework.data.cassandra.core.CassandraTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Order lifecycle:
- * - POST /orders            -> create (reserve inventory)
- * - GET /orders/{orderId}   -> lookup order
+ * - POST /orders                  -> create (reserve inventory)
+ * - GET  /orders/{orderId}        -> lookup order
  * - POST /orders/{orderId}/cancel -> cancel (release inventory)
- * - PUT /orders/{orderId}   -> limited update (only owner, only while RESERVED)
+ * - PUT  /orders/{orderId}        -> limited update
  *
- * The PUT endpoint demonstrates "Update Order" for the project rubric.
- * In practice you'd update shipping address, notes, etc. For demo,
- * we allow updating the customerEmail (contact email for this order),
- * but only if caller owns the order and it's still RESERVED.
+ * Cassandra 扩展：
+ * - GET  /orders/{orderId}/events -> 订单事件时间线（order_events_by_order）
  */
 @RestController
 @RequestMapping("/orders")
@@ -28,6 +28,9 @@ import java.util.List;
 public class OrderController {
 
     private final OrderService orderService;
+
+    // 为了少改 Service 的读取面，这里直接用 Template 读取事件表
+    private final CassandraTemplate cassandraTemplate;
 
     // ----- Create Order -----
     @PostMapping
@@ -57,35 +60,39 @@ public class OrderController {
             @RequestBody OrderUpdateRequest request,
             Authentication auth
     ) {
-        // who is calling
         String callerEmail = auth.getName();
-
-        // load the order
         OrderDocument order = orderService.getOrderByOrderId(orderId);
 
-        // Only the owner can update
         if (!order.getCustomerEmail().equalsIgnoreCase(callerEmail)) {
             throw new RuntimeException("Not allowed to modify someone else's order");
         }
-
-        // Only editable while RESERVED (i.e. before it's fulfilled/paid/shipped)
         if (!"RESERVED".equalsIgnoreCase(order.getStatus())) {
             throw new RuntimeException("Order can no longer be modified");
         }
-
-        // We allow updating contact email for this order (like "ship to my work email instead")
         if (request.getCustomerEmailOverride() != null &&
                 !request.getCustomerEmailOverride().isBlank()) {
             order.setCustomerEmail(request.getCustomerEmailOverride());
         }
-
-        // If in future you add shippingAddress or notes, you'd update them here
-
         return orderService.saveDirect(order);
     }
 
-    // --------- DTOs ---------
+    // -------------------- Cassandra：订单事件时间线 --------------------
 
+    /** Cassandra：订单时间线（倒序），表：order_events_by_order(order_id, ts DESC, type, payload_json) */
+    @GetMapping("/{orderId}/events")
+    public List<Map<String, Object>> listOrderEvents(@PathVariable String orderId,
+                                                     @RequestParam(required = false, defaultValue = "50") int limit) {
+        String cql = "SELECT order_id, ts, type, payload_json FROM order_events_by_order " +
+                "WHERE order_id = ? LIMIT " + Math.max(1, limit);
+        return cassandraTemplate.getCqlOperations().query(cql, ps -> ps.bind(orderId), (row, i) -> Map.of(
+                "orderId", row.getString("order_id"),
+                "ts", row.getLong("ts"),
+                "type", row.getString("type"),
+                "payload", row.getString("payload_json")
+        ));
+    }
+
+    // --------- DTOs ---------
     @Data
     public static class CreateOrderRequest {
         private String customerEmail;
@@ -94,7 +101,6 @@ public class OrderController {
 
     @Data
     public static class OrderUpdateRequest {
-        // example changeable field; you can add shippingAddress, specialInstructions, etc.
         private String customerEmailOverride;
     }
 }

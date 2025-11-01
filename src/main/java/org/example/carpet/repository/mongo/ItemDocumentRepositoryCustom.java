@@ -1,17 +1,14 @@
 package org.example.carpet.repository.mongo;
 
-/**
- * Custom extension for atomic stock operations.
- */
 public interface ItemDocumentRepositoryCustom {
+
     /**
-     * 原子扣减库存（仅当可用数量 >= qty 时才更新）
-     * @return 1 表示成功，0 表示库存不足或不存在
+     * 尝试扣减库存：仅当 stockQuantity >= qty 时成功，成功返回 1，失败返回 0。
      */
     int tryDeduct(String sku, int qty);
 
     /**
-     * 原子回补库存（在预留失败时回滚）
+     * 回补库存（只要文档存在就 +qty）。成功返回 1，未找到返回 0。
      */
     int tryRestock(String sku, int qty);
 }

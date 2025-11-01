@@ -24,32 +24,34 @@ public class SecurityConfig {
     private final JwtFilter jwtFilter;
 
     private static final String[] PUBLIC_ENDPOINTS = {
-            "/auth/**",
-            "/account/create",
-            "/items/**",
-            "/inventory/**",
-            "/media/**",
-            "/",
-            "/index.html",
-            "/favicon.ico",
-            "/assets/**"
+            "/", "/index.html", "/favicon.ico", "/assets/**",
+            "/auth/**", "/account/create",
+            "/items/**", "/inventory/**", "/media/**",
+            "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html",
+            "/actuator/health","/items/**/recommendations",
+            "/items/recommendations"
     };
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // 预检
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .anyRequest().authenticated()
+                )
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(new JwtAuthEntryPoint())
+                        .accessDeniedHandler(new RestAccessDeniedHandler())
                 );
-
-        // 让 JwtFilter 生效，但它本身要“会跳过白名单与无 Authorization”
-        http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
-
+        // 将 JwtFilter 接在 UsernamePasswordAuthenticationFilter 之前
+        // 如果需要 H2 控制台，取消注释下面两行：
+        // http.headers(h -> h.frameOptions(frame -> frame.disable()));
+        // .authorizeHttpRequests(auth -> auth.requestMatchers("/h2-console/**").permitAll());
         return http.build();
     }
 
@@ -57,11 +59,9 @@ public class SecurityConfig {
     CorsConfigurationSource corsConfigurationSource() {
         var cfg = new CorsConfiguration();
         cfg.setAllowedOrigins(List.of("http://localhost:5173", "http://127.0.0.1:5173"));
-        cfg.setAllowedMethods(List.of("GET","POST","PUT","DELETE","PATCH","OPTIONS"));
+        cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
-        cfg.setExposedHeaders(List.of("Authorization", "Location"));
         cfg.setAllowCredentials(true);
-
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", cfg);
         return source;

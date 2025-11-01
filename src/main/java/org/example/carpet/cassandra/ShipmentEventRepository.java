@@ -1,4 +1,4 @@
-package org.example.carpet.repository.cassandra;
+package org.example.carpet.cassandra;
 
 import java.time.Instant;
 import java.util.List;
