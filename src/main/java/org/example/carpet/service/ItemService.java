@@ -2,7 +2,7 @@ package org.example.carpet.service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.carpet.model.ItemDocument;
-import org.example.carpet.repository.ItemRepository;
+import org.example.carpet.repository.mongo.ItemDocumentRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ItemService {
 
-    private final ItemRepository itemRepository;
+    private final ItemDocumentRepository itemRepository;
 
     // 创建或更新商品 (管理员用)
     public ItemDocument upsertItem(ItemDocument doc) {

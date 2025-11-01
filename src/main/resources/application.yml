@@ -5,6 +5,13 @@ spring:
   application:
     name: carpet-backend
 
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.cassandra.CassandraAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.cassandra.CassandraDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.cassandra.CassandraRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.cassandra.CassandraReactiveRepositoriesAutoConfiguration
+
   data:
     mongodb:
       host: localhost
@@ -12,15 +19,17 @@ spring:
       database: carpetdb
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/ledgerdb
+    url: jdbc:postgresql://localhost:5432/carpetdb
     username: carpet
     password: secret
+    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
       ddl-auto: update
+    show-sql: true
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
 
   kafka:
     bootstrap-servers: localhost:9092

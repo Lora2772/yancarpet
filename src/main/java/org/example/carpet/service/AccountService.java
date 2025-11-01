@@ -5,7 +5,7 @@ import org.example.carpet.dto.AccountCreateRequest;
 import org.example.carpet.dto.AccountUpdateRequest;
 import org.example.carpet.dto.AccountResponse;
 import org.example.carpet.model.UserAccountDocument;
-import org.example.carpet.repository.UserAccountRepository;
+import org.example.carpet.repository.mongo.UserAccountRepository;
 import org.springframework.stereotype.Service;
 
 @Service

@@ -3,10 +3,10 @@ package org.example.carpet.service;
 import lombok.RequiredArgsConstructor;
 import org.example.carpet.kafka.PaymentEventProducer;
 import org.example.carpet.ledger.PaymentLedgerEntity;
-import org.example.carpet.ledger.PaymentLedgerRepository;
+import org.example.carpet.repository.jpa.PaymentLedgerRepository;
 import org.example.carpet.model.OrderDocument;
 import org.example.carpet.model.PaymentRecord;
-import org.example.carpet.repository.PaymentRepository;
+import org.example.carpet.repository.mongo.PaymentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,33 +14,34 @@ import java.time.LocalDateTime;
 
 /**
  * Handles payment lifecycle for an order:
- * - submitPayment: capture funds
- * - refundPayment: reverse funds
+ *  - submitPayment: capture funds
+ *  - refundPayment: reverse funds
  *
- * We annotate both flows with @Transactional so that updating the PaymentRecord
- * and updating the Order status happen in one (service-layer) transaction.
- * In production you'd also use an outbox pattern to guarantee Kafka delivery.
+ * NOTE:
+ *  - This service writes Mongo (PaymentRecord / OrderDocument) and Postgres (PaymentLedgerEntity).
+ *  - For cross-store reliability in production, consider the Outbox/Saga pattern for Kafka events.
  */
 @Service
 @RequiredArgsConstructor
 public class PaymentService {
 
-    private final PaymentRepository paymentRepository;
-    private final OrderService orderService;
-    private final PaymentEventProducer paymentEventProducer;
-    private final PaymentLedgerRepository paymentLedgerRepository;
-
+    private final PaymentRepository paymentRepository;               // Mongo: payment records
+    private final OrderService orderService;                         // Mongo: orders
+    private final PaymentEventProducer paymentEventProducer;         // Kafka events
+    private final PaymentLedgerRepository paymentLedgerRepository;   // JPA: immutable ledger (Postgres)
 
     /**
      * User clicks "Pay Now".
-     * 1. create a PENDING payment record
-     * 2. simulate card success -> mark SUCCESS
-     * 3. mark order PAID
-     * 4. emit payment.succeeded event
+     * Flow:
+     *  1) create PENDING record
+     *  2) (demo) auto-approve CARD -> SUCCESS
+     *  3) mark order PAID
+     *  4) emit payment.succeeded event
+     *  5) append immutable ledger row
      */
     @Transactional
     public PaymentRecord submitPayment(String orderId, String paymentMethod, double amount) {
-
+        // 1) create pending record
         PaymentRecord record = PaymentRecord.builder()
                 .id(null)
                 .orderId(orderId)
@@ -50,21 +51,23 @@ public class PaymentService {
                 .createdAt(LocalDateTime.now())
                 .completedAt(null)
                 .build();
-
         record = paymentRepository.save(record);
 
-        // For CARD we auto-approve in this demo
+        // 2) demo: auto-approve CARD
         if ("CARD".equalsIgnoreCase(paymentMethod)) {
             record.setStatus("SUCCESS");
             record.setCompletedAt(LocalDateTime.now());
             record = paymentRepository.save(record);
 
-            // update order status -> PAID
+            // 3) mark order PAID
             orderService.markPaid(orderId);
 
-            // publish async event
-            paymentEventProducer.publishPaymentSucceeded(orderId, amount);
+            // 4) async event (failure shouldn't roll back DB here; add outbox in prod)
+            try {
+                paymentEventProducer.publishPaymentSucceeded(orderId, amount);
+            } catch (Exception ignored) { /* log.warn("publishPaymentSucceeded failed", ignored); */ }
 
+            // 5) immutable ledger
             paymentLedgerRepository.save(
                     PaymentLedgerEntity.builder()
                             .orderId(orderId)
@@ -74,7 +77,6 @@ public class PaymentService {
                             .recordedAt(LocalDateTime.now())
                             .build()
             );
-
         }
 
         return record;
@@ -83,13 +85,15 @@ public class PaymentService {
     /**
      * Reverse Payment / Refund API.
      * Called when a paid order is cancelled or customer is refunded.
-     * 1. ensure there was a successful payment
-     * 2. create a negative refund record with REFUND_SUCCESS
-     * 3. mark order REFUNDED
+     * Flow:
+     *  1) ensure there was a successful payment
+     *  2) create negative refund record (REFUND_SUCCESS)
+     *  3) mark order REFUNDED
+     *  4) append immutable ledger row (negative amount)
      */
     @Transactional
     public PaymentRecord refundPayment(String orderId, String reason) {
-
+        // 1) find successful payment
         PaymentRecord paid = paymentRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new RuntimeException("No payment found for order " + orderId));
 
@@ -99,26 +103,27 @@ public class PaymentService {
 
         double refundAmount = paid.getAmount();
 
+        // 2) create refund record (negative amount)
         PaymentRecord refundRecord = PaymentRecord.builder()
                 .id(null)
                 .orderId(orderId)
-                .amount(refundAmount * -1)  // negative means money going back to customer
+                .amount(refundAmount * -1)  // negative = back to customer
                 .paymentMethod(paid.getPaymentMethod())
                 .status("REFUND_SUCCESS")
                 .createdAt(LocalDateTime.now())
                 .completedAt(LocalDateTime.now())
                 .build();
-
         refundRecord = paymentRepository.save(refundRecord);
 
-        // mark the order as REFUNDED
+        // 3) mark order as REFUNDED
         OrderDocument order = orderService.getOrderByOrderId(orderId);
-        order.setStatus("REFUNDED"); // We can describe this as CANCELLED_REFUNDED in docs if needed
+        order.setStatus("REFUNDED"); // or CANCELLED_REFUNDED per business wording
         orderService.saveDirect(order);
 
-        // (OPTIONAL) emit refund event via Kafka outbox pattern
-        // paymentEventProducer.publishPaymentRefunded(orderId, refundAmount);
+        // (Optional) emit refund event
+        // try { paymentEventProducer.publishPaymentRefunded(orderId, refundAmount); } catch (Exception ignored) {}
 
+        // 4) immutable refund ledger (negative)
         paymentLedgerRepository.save(
                 PaymentLedgerEntity.builder()
                         .orderId(orderId)

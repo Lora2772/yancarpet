@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.*;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.math.BigDecimal;
@@ -42,7 +43,12 @@ public class ItemDocument {
     private BigDecimal unitPrice;   // 如 140
     private String unit;            // 如 "usd/sqm"
 
-    private Boolean stockAvailable;
+    @Version
+    private Long version;
+
+    private Integer stockQuantity; // 扣减这个
+    private Boolean stockAvailable; // 可由 stockQuantity > 0 推导更新
+
     private List<String> keywords;
 
     private Boolean contactSalesRequired;

@@ -16,12 +16,15 @@ import org.springframework.web.bind.annotation.*;
 )
 public interface InventoryClient {
 
+    public record ReservationResult(boolean success, String reservationId, int requested, int available) {}
+
     @GetMapping("/check")
     InventoryService.InventoryStatus checkInventory(@RequestParam("sku") String sku);
 
     @PostMapping("/reserve")
-    boolean reserve(@RequestParam("sku") String sku, @RequestParam("quantity") int quantity);
+    ReservationResult reserve(@RequestParam("sku") String sku, @RequestParam("quantity") int quantity);
 
     @PostMapping("/release")
-    void release(@RequestParam("sku") String sku, @RequestParam("quantity") int quantity);
+    void release(@RequestParam("reservationId") String reservationId, @RequestParam("quantity") int quantity);
+
 }

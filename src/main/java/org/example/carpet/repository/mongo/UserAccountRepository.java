@@ -1,4 +1,4 @@
-package org.example.carpet.repository;
+package org.example.carpet.repository.mongo;
 
 import org.example.carpet.model.UserAccountDocument;
 import org.springframework.data.mongodb.repository.MongoRepository;

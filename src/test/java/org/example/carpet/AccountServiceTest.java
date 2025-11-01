@@ -6,7 +6,7 @@ import org.example.carpet.dto.AccountResponse;
 import org.example.carpet.model.Address;
 import org.example.carpet.model.PaymentMethodInfo;
 import org.example.carpet.model.UserAccountDocument;
-import org.example.carpet.repository.UserAccountRepository;
+import org.example.carpet.repository.mongo.UserAccountRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
