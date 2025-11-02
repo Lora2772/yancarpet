@@ -1,8 +1,9 @@
 package org.example.carpet.controller;
 
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
-import org.example.carpet.security.JwtUtil;
+import org.example.carpet.dto.LoginRequest;
+import org.example.carpet.dto.LoginResp;
+import org.example.carpet.service.AuthService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -11,23 +12,10 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final JwtUtil jwtUtil;
+    private final AuthService authService;
 
     @PostMapping("/login")
-    public ResponseEntity<TokenResp> login(@RequestBody LoginReq req) {
-        // TODO: 在这里校验用户名/密码（示例放行）
-        String token = jwtUtil.generateToken(req.getEmail());
-        return ResponseEntity.ok(new TokenResp(token));
-    }
-
-    @Data
-    public static class LoginReq {
-        private String email;
-        private String password;
-    }
-
-    @Data
-    public static class TokenResp {
-        private final String token;
+    public ResponseEntity<LoginResp> login(@RequestBody LoginRequest req) {
+        return ResponseEntity.ok(authService.login(req.getEmail(), req.getPassword()));
     }
 }

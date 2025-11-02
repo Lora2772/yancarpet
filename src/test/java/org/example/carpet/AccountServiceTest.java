@@ -5,8 +5,8 @@ import org.example.carpet.dto.AccountUpdateRequest;
 import org.example.carpet.dto.AccountResponse;
 import org.example.carpet.model.Address;
 import org.example.carpet.model.PaymentMethodInfo;
-import org.example.carpet.model.UserAccountDocument;
-import org.example.carpet.repository.mongo.UserAccountRepository;
+import org.example.carpet.model.Account;
+import org.example.carpet.repository.mongo.AccountRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
@@ -25,7 +25,7 @@ import static org.mockito.Mockito.*;
 class AccountServiceTest {
 
     @Mock
-    UserAccountRepository userRepo;
+    AccountRepository userRepo;
 
     @InjectMocks
     AccountService accountService;
@@ -52,10 +52,10 @@ class AccountServiceTest {
                 .build();
         req.setDefaultPaymentMethod(pm);
 
-        when(userRepo.findByEmailIgnoreCase("buyer@yancarpet.com"))
+        when(userRepo.findByEmail("buyer@yancarpet.com"))
                 .thenReturn(Optional.empty());
 
-        when(userRepo.save(any(UserAccountDocument.class)))
+        when(userRepo.save(any(Account.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
         AccountResponse resp = accountService.createAccount(req);
@@ -67,7 +67,7 @@ class AccountServiceTest {
 
     @Test
     void updateAccount_shouldModifyProfileFields() {
-        UserAccountDocument existing = UserAccountDocument.builder()
+        Account existing = Account.builder()
                 .email("buyer@yancarpet.com")
                 .userName("Old Name")
                 .passwordHash("{plain}pw123")
@@ -76,10 +76,10 @@ class AccountServiceTest {
                 .defaultPaymentMethod(null)
                 .build();
 
-        when(userRepo.findByEmailIgnoreCase("buyer@yancarpet.com"))
+        when(userRepo.findByEmail("buyer@yancarpet.com"))
                 .thenReturn(Optional.of(existing));
 
-        when(userRepo.save(any(UserAccountDocument.class)))
+        when(userRepo.save(any(Account.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
         AccountUpdateRequest req = new AccountUpdateRequest();
@@ -102,13 +102,13 @@ class AccountServiceTest {
 
     @Test
     void getMyAccount_shouldReturnProfile() {
-        UserAccountDocument existing = UserAccountDocument.builder()
+        Account existing = Account.builder()
                 .email("abc@test.com")
                 .userName("Cool User")
                 .passwordHash("{plain}111")
                 .build();
 
-        when(userRepo.findByEmailIgnoreCase("abc@test.com"))
+        when(userRepo.findByEmail("abc@test.com"))
                 .thenReturn(Optional.of(existing));
 
         AccountResponse r = accountService.getMyAccount("abc@test.com");
@@ -119,7 +119,7 @@ class AccountServiceTest {
 
     @Test
     void passwordMatches_shouldCheckPlainWrapped() {
-        UserAccountDocument user = UserAccountDocument.builder()
+        Account user = Account.builder()
                 .email("abc@test.com")
                 .passwordHash("{plain}secret")
                 .build();

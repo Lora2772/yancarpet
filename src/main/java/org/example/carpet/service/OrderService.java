@@ -11,6 +11,9 @@ import org.example.carpet.repository.mongo.OrderRepository;
 import org.springframework.data.cassandra.core.CassandraOperations;
 import org.springframework.data.cassandra.core.CassandraTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -42,6 +45,14 @@ public class OrderService {
     private final CassandraTemplate cassandraTemplate;
     // === 复用已有库存服务，在其中写 Cassandra 预留 ===
     private final InventoryService inventoryService;
+
+    // ====== 新增：查询订单历史（分页，按 createdAt 倒序） ======
+    public Page<OrderDocument> getOrderHistory(String customerEmail, int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 100); // 防止一次拉太多
+        var pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return orderRepository.findByCustomerEmail(customerEmail, pageable);
+    }
 
     /**
      * 创建订单：逐条原子扣减库存，任何一条不足则回补已扣部分并抛 409 业务异常

@@ -31,21 +31,24 @@ public class JwtFilter extends OncePerRequestFilter {
      */
     // 与 SecurityConfig 保持一致的白名单（仅在过滤器层用于“快速跳过”，真正的授权还是由 SecurityConfig 控）
 
+// JwtFilter.java
     private static final List<AntPathRequestMatcher> PUBLIC_MATCHERS = List.of(
             new AntPathRequestMatcher("/"),
             new AntPathRequestMatcher("/index.html"),
             new AntPathRequestMatcher("/favicon.ico"),
             new AntPathRequestMatcher("/assets/**"),
-            new AntPathRequestMatcher("/auth/**"),
-            new AntPathRequestMatcher("/account/create"),
+            new AntPathRequestMatcher("/auth/**"),        // <— 放行
+            new AntPathRequestMatcher("/account/**"),     // <— 放行（包括 /account/create）
             new AntPathRequestMatcher("/items/**"),
             new AntPathRequestMatcher("/inventory/**"),
             new AntPathRequestMatcher("/media/**"),
             new AntPathRequestMatcher("/v3/api-docs/**"),
             new AntPathRequestMatcher("/swagger-ui/**"),
             new AntPathRequestMatcher("/swagger-ui.html"),
-            new AntPathRequestMatcher("/actuator/health")
+            new AntPathRequestMatcher("/actuator/health"),
+            new AntPathRequestMatcher("/items/*/recommendations")
     );
+
 
     @Override
     protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {

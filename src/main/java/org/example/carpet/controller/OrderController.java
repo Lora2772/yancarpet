@@ -6,6 +6,7 @@ import org.example.carpet.model.OrderDocument;
 import org.example.carpet.model.OrderLineItem;
 import org.example.carpet.service.OrderService;
 import org.springframework.data.cassandra.core.CassandraTemplate;
+import org.springframework.data.domain.Page;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,6 +32,18 @@ public class OrderController {
 
     // 为了少改 Service 的读取面，这里直接用 Template 读取事件表
     private final CassandraTemplate cassandraTemplate;
+
+    // ====== 新增：订单历史 ======
+    // GET /orders/history?page=0&size=20   （需登录）
+    @GetMapping("/history")
+    public Page<OrderDocument> history(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            Authentication auth
+    ) {
+        String email = auth.getName();
+        return orderService.getOrderHistory(email, page, size);
+    }
 
     // ----- Create Order -----
     @PostMapping
