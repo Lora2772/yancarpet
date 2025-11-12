@@ -8,15 +8,15 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Example Kafka consumer.
+ * Kafka consumer for payment events.
  * Listens for payment.succeeded events and updates the order status to PAID.
  *
  * Note:
- * In our current PaymentService we already call orderService.markPaid() synchronously.
- * This consumer shows how it *would* work in a real microservice world,
- * where Payment Service and Order Service are separate processes.
+ * This consumer works alongside the synchronous call in PaymentService.
+ * The OrderService.markPaid() method is idempotent, so duplicate calls are safe.
+ * This provides both immediate consistency (sync) and resilience (async).
  */
-//@Component
+@Component
 @RequiredArgsConstructor
 public class OrderEventConsumer {
 

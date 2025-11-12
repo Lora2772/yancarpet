@@ -2,6 +2,8 @@ package org.example.carpet.controller;
 
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
+import org.example.carpet.dto.AddressUpdateRequest;
+import org.example.carpet.model.Address;
 import org.example.carpet.model.OrderDocument;
 import org.example.carpet.model.OrderLineItem;
 import org.example.carpet.service.OrderService;
@@ -87,6 +89,28 @@ public class OrderController {
             order.setCustomerEmail(request.getCustomerEmailOverride());
         }
         return orderService.saveDirect(order);
+    }
+
+    // ----- Update Shipping Address -----
+    @PutMapping("/{orderId}/shipping-address")
+    public OrderDocument updateShippingAddress(
+            @PathVariable String orderId,
+            @RequestBody AddressUpdateRequest request,
+            Authentication auth
+    ) {
+        String callerEmail = auth.getName();
+
+        // Convert DTO to Address model
+        Address address = Address.builder()
+                .line1(request.getLine1())
+                .line2(request.getLine2())
+                .city(request.getCity())
+                .stateOrProvince(request.getStateOrProvince())
+                .postalCode(request.getPostalCode())
+                .country(request.getCountry())
+                .build();
+
+        return orderService.updateShippingAddress(orderId, callerEmail, address);
     }
 
     // -------------------- Cassandra：订单事件时间线 --------------------

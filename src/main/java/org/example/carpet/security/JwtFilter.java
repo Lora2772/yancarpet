@@ -38,7 +38,7 @@ public class JwtFilter extends OncePerRequestFilter {
             new AntPathRequestMatcher("/favicon.ico"),
             new AntPathRequestMatcher("/assets/**"),
             new AntPathRequestMatcher("/auth/**"),        // <— 放行
-            new AntPathRequestMatcher("/account/**"),     // <— 放行（包括 /account/create）
+            new AntPathRequestMatcher("/account/create"), // <— 只放行注册接口
             new AntPathRequestMatcher("/items/**"),
             new AntPathRequestMatcher("/inventory/**"),
             new AntPathRequestMatcher("/media/**"),

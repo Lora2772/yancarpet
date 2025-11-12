@@ -40,11 +40,11 @@ spring:
         format_sql: true
 
   cassandra:
-    contact-points: localhost
+    contact-points: 127.0.0.1
     port: 9042
-    keyspace-name: carpet_ks
-    local-datacenter: datacenter1
-    schema-action: none   # 推荐 none；用 CQL 脚本建表
+    local-datacenter: datacenter1   # ← 必须与实际一致
+    keyspace-name: yancarpet         # 你的 keyspace；没有就先建
+    schema-action: create_if_not_exists
 
   # 如需 Postgres，再开启 datasource；不用就先注释掉这块
   datasource:

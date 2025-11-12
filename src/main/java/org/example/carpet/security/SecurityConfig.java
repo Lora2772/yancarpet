@@ -27,7 +27,7 @@ public class SecurityConfig {
             "/", "/index.html", "/favicon.ico",
             "/assets/**",
             "/auth/**",              // <— 登录相关
-            "/account/**",           // <— 关键：整个 account 前缀统统放行
+            "/account/create",       // <— 只放行注册接口
             "/items/**", "/inventory/**", "/media/**",
             "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html",
             "/actuator/health",
@@ -42,8 +42,8 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        // 明确放行 account/auth POST（有些环境对 POST 更“谨慎”）
-                        .requestMatchers(HttpMethod.POST, "/account/**", "/auth/**").permitAll()
+                        // 明确放行 account/create 和 auth POST（有些环境对 POST 更"谨慎"）
+                        .requestMatchers(HttpMethod.POST, "/account/create", "/auth/**").permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .anyRequest().authenticated()
                 )

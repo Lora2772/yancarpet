@@ -23,6 +23,8 @@ public class OrderDocument {
 
     private String customerEmail;
 
+    private Address shippingAddress;
+
     private double totalAmount;
 
     private String status; // CREATED / RESERVED / PAID / CANCELLED

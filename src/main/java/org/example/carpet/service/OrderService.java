@@ -1,6 +1,7 @@
 package org.example.carpet.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.carpet.client.InventoryClient;
 import org.example.carpet.exception.InsufficientStockException;
 import org.example.carpet.kafka.InventoryEventProducer;
@@ -27,12 +28,12 @@ import java.util.UUID;
  * - get
  * - cancel (restock in Mongo; best-effort external release)
  * - markPaid
- *
  * Cassandra 集成：
  * - 订单事件时间线：order_events_by_order (order_id, ts DESC, type, payload_json)
  * - 预留记录：委托 InventoryService.recordReservationCassandra(...)
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class OrderService {
 
@@ -156,6 +157,14 @@ public class OrderService {
 
     public OrderDocument markPaid(String orderId) {
         OrderDocument order = getOrderByOrderId(orderId);
+
+        // Idempotency: If already PAID, return immediately (no error)
+        // This allows both synchronous and asynchronous payment processing paths
+        if ("PAID".equals(order.getStatus())) {
+            log.info("Order {} already marked PAID, skipping duplicate processing", orderId);
+            return order;
+        }
+
         if (!"RESERVED".equals(order.getStatus())) {
             throw new RuntimeException("Order not in RESERVED state, can't mark PAID.");
         }
@@ -171,6 +180,33 @@ public class OrderService {
     /** 供其它服务直接更新订单状态 */
     public OrderDocument saveDirect(OrderDocument order) {
         order.setUpdatedAt(LocalDateTime.now());
+        return orderRepository.save(order);
+    }
+
+    /** 更新订单配送地址 */
+    public OrderDocument updateShippingAddress(String orderId, String requesterEmail,
+                                               org.example.carpet.model.Address address) {
+        OrderDocument order = getOrderByOrderId(orderId);
+
+        // 验证：只有订单所有者可以更新
+        if (!order.getCustomerEmail().equals(requesterEmail)) {
+            throw new RuntimeException("You can only update your own orders");
+        }
+
+        // 验证：只有 RESERVED 或 PAID 状态可以更新配送地址
+        if (!"RESERVED".equals(order.getStatus()) && !"PAID".equals(order.getStatus())) {
+            throw new RuntimeException("Can only update shipping address for RESERVED or PAID orders");
+        }
+
+        order.setShippingAddress(address);
+        order.setUpdatedAt(LocalDateTime.now());
+
+        // 记录事件到 Cassandra
+        String payload = String.format("{\"line1\":\"%s\",\"city\":\"%s\",\"country\":\"%s\"}",
+                                      address.getLine1(), address.getCity(), address.getCountry());
+        appendOrderEvent(orderId, "ShippingAddressUpdated", payload);
+
+        log.info("Updated shipping address for order {} by user {}", orderId, requesterEmail);
         return orderRepository.save(order);
     }
 
