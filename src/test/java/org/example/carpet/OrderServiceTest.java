@@ -4,13 +4,13 @@ import org.example.carpet.client.InventoryClient;
 import org.example.carpet.kafka.InventoryEventProducer;
 import org.example.carpet.model.OrderDocument;
 import org.example.carpet.model.OrderLineItem;
-import org.example.carpet.repository.mongo.ItemDocumentRepository;
 import org.example.carpet.repository.mongo.OrderRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.cassandra.core.CassandraTemplate;
 
 import java.util.List;
 import java.util.Optional;
@@ -23,9 +23,10 @@ import static org.mockito.Mockito.*;
 class OrderServiceTest {
 
     @Mock OrderRepository orderRepository;                   // Mongo: orders
-    @Mock ItemDocumentRepository itemRepo;                   // Mongo: items (tryDeduct/tryRestock)
+    @Mock InventoryService inventoryService;                 // 库存服务（原子扣减/回补）
     @Mock InventoryEventProducer inventoryEventProducer;     // Kafka
     @Mock InventoryClient inventoryClient;                   // 外部库存（取消时 best-effort 释放）
+    @Mock CassandraTemplate cassandraTemplate;               // Cassandra 事件时间线
 
     @InjectMocks OrderService orderService;
 
@@ -38,8 +39,8 @@ class OrderServiceTest {
                 .price(199.99)
                 .build();
 
-        // 当前实现使用 itemRepo.tryDeduct(...) 而不是 inventoryClient.reserve(...)
-        when(itemRepo.tryDeduct("RUG-RED", 2)).thenReturn(1);
+        // 现在使用 inventoryService.reserve(...) 进行库存扣减
+        when(inventoryService.reserve("RUG-RED", 2)).thenReturn(true);
 
         // 保存订单时回传入参
         when(orderRepository.save(any(OrderDocument.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -47,7 +48,7 @@ class OrderServiceTest {
         OrderDocument created = orderService.createOrder("buyer@example.com", List.of(line1));
 
         assertEquals("RESERVED", created.getStatus());
-        verify(itemRepo).tryDeduct("RUG-RED", 2);
+        verify(inventoryService).reserve("RUG-RED", 2);
         verify(orderRepository).save(any(OrderDocument.class));
         // 事件发送（失败不回滚，这里只验证被调用）
         verify(inventoryEventProducer).publishInventoryReserved(anyString(), eq("RUG-RED"), eq(2));
@@ -72,18 +73,17 @@ class OrderServiceTest {
         when(orderRepository.findByOrderId("ORD-abc")).thenReturn(Optional.of(reserved));
         when(orderRepository.save(any(OrderDocument.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        // 回补本地库存
-        when(itemRepo.tryRestock("RUG-RED", 2)).thenReturn(1);
+        // 回补本地库存 - 现在通过 inventoryService.release(...)
+        when(inventoryService.release("RUG-RED", 2)).thenReturn(true);
 
         OrderDocument cancelled = orderService.cancelOrder("ORD-abc");
 
         assertEquals("CANCELLED", cancelled.getStatus());
-        verify(itemRepo).tryRestock("RUG-RED", 2);
+        verify(inventoryService).release("RUG-RED", 2);
         verify(orderRepository).save(any(OrderDocument.class));
         verify(inventoryEventProducer).publishInventoryReleased(eq("ORD-abc"), eq("RUG-RED"), eq(2));
 
-        // 如果你的 InventoryClient.release 只有一个参数（sku），把下面这行改成对应签名即可
-        // verify(inventoryClient).release("RUG-RED", 2);
-        // 或 verify(inventoryClient).release("RUG-RED");
+        // 外部库存服务也会被调用（best-effort）
+        verify(inventoryClient).release("RUG-RED", 2);
     }
 }

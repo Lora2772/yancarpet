@@ -3,15 +3,14 @@ package org.example.carpet.service;
 import lombok.RequiredArgsConstructor;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
+import org.example.carpet.exception.ItemNotFoundException;
 import org.example.carpet.model.ItemDocument;
 import org.example.carpet.repository.mongo.ItemDocumentRepository;
-import org.springframework.data.cassandra.core.CassandraOperations;
 import org.springframework.data.cassandra.core.CassandraTemplate;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
-import org.springframework.data.cassandra.core.CassandraOperations;
 
 
 import java.math.BigDecimal;
@@ -55,7 +54,7 @@ public class ItemService {
     /** 商品详情 */
     public ItemDocument getBySku(String sku) {
         return itemRepository.findBySku(sku)
-                .orElseThrow(() -> new RuntimeException("Item not found for sku: " + sku));
+                .orElseThrow(() -> new ItemNotFoundException(sku));
     }
 
     /** 简单搜索 + 过滤（本地内存过滤；量大时建议改 Mongo 查询条件） */

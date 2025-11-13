@@ -25,6 +25,6 @@ public interface InventoryClient {
     ReservationResult reserve(@RequestParam("sku") String sku, @RequestParam("quantity") int quantity);
 
     @PostMapping("/release")
-    void release(@RequestParam("reservationId") String reservationId, @RequestParam("quantity") int quantity);
+    boolean release(@RequestParam("sku") String sku, @RequestParam("quantity") int quantity);
 
 }

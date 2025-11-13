@@ -1,7 +1,25 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(mvn test:*)",
+      "Bash(find:*)",
+      "Bash(mvn clean test:*)",
+      "Bash(psql:*)",
+      "Bash(timeout 5 psql:*)",
+      "Bash(docker-compose:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker logs:*)",
+      "Bash(findstr:*)",
+      "Bash(npm run dev)",
+      "Bash(timeout:*)",
+      "Bash(dir /s /b *.html *.js *.jsx *.tsx *.vue 2)",
+      "Bash(nul)",
+      "Bash(del .\\nul)",
+      "Bash(powershell -Command \"Remove-Item -Path ''.\\nul'' -Force\")",
+      "Bash(git clean:*)",
+      "Bash(.gitignore)",
+      "Bash(mvn clean compile:*)"
     ],
     "deny": [],
     "ask": []

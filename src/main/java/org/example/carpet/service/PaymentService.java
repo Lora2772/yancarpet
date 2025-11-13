@@ -1,6 +1,8 @@
 package org.example.carpet.service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.carpet.exception.InvalidOrderStateException;
+import org.example.carpet.exception.PaymentNotFoundException;
 import org.example.carpet.kafka.PaymentEventProducer;
 import org.example.carpet.ledger.PaymentLedgerEntity;
 import org.example.carpet.repository.jpa.PaymentLedgerRepository;
@@ -95,10 +97,10 @@ public class PaymentService {
     public PaymentRecord refundPayment(String orderId, String reason) {
         // 1) find successful payment
         PaymentRecord paid = paymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new RuntimeException("No payment found for order " + orderId));
+                .orElseThrow(() -> new PaymentNotFoundException(orderId));
 
         if (!"SUCCESS".equalsIgnoreCase(paid.getStatus())) {
-            throw new RuntimeException("Payment not settled, cannot refund.");
+            throw new InvalidOrderStateException(orderId, paid.getStatus(), "SUCCESS");
         }
 
         double refundAmount = paid.getAmount();
@@ -139,6 +141,6 @@ public class PaymentService {
 
     public PaymentRecord getPaymentStatus(String orderId) {
         return paymentRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new RuntimeException("No payment for order: " + orderId));
+                .orElseThrow(() -> new PaymentNotFoundException(orderId));
     }
 }

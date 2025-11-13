@@ -1,11 +1,13 @@
 package org.example.carpet.controller;
 
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.example.carpet.dto.AddressUpdateRequest;
+import org.example.carpet.dto.CreateOrderRequest;
+import org.example.carpet.dto.OrderUpdateRequest;
+import org.example.carpet.exception.InvalidOrderStateException;
+import org.example.carpet.exception.UnauthorizedAccessException;
 import org.example.carpet.model.Address;
 import org.example.carpet.model.OrderDocument;
-import org.example.carpet.model.OrderLineItem;
 import org.example.carpet.service.OrderService;
 import org.springframework.data.cassandra.core.CassandraTemplate;
 import org.springframework.data.domain.Page;
@@ -79,10 +81,10 @@ public class OrderController {
         OrderDocument order = orderService.getOrderByOrderId(orderId);
 
         if (!order.getCustomerEmail().equalsIgnoreCase(callerEmail)) {
-            throw new RuntimeException("Not allowed to modify someone else's order");
+            throw new UnauthorizedAccessException(callerEmail, "order " + orderId);
         }
         if (!"RESERVED".equalsIgnoreCase(order.getStatus())) {
-            throw new RuntimeException("Order can no longer be modified");
+            throw new InvalidOrderStateException(orderId, order.getStatus(), "RESERVED");
         }
         if (request.getCustomerEmailOverride() != null &&
                 !request.getCustomerEmailOverride().isBlank()) {
@@ -129,15 +131,4 @@ public class OrderController {
         ));
     }
 
-    // --------- DTOs ---------
-    @Data
-    public static class CreateOrderRequest {
-        private String customerEmail;
-        private List<OrderLineItem> items;
-    }
-
-    @Data
-    public static class OrderUpdateRequest {
-        private String customerEmailOverride;
-    }
 }

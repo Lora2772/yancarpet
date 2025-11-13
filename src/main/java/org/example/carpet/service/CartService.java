@@ -9,7 +9,6 @@ import org.example.carpet.dto.CartItemView;
 import org.example.carpet.dto.CartUpsertRequest;
 import org.example.carpet.model.ItemDocument;
 import org.example.carpet.repository.mongo.ItemDocumentRepository;
-import org.springframework.data.cassandra.core.CassandraOperations;
 import org.springframework.data.cassandra.core.CassandraTemplate;
 import org.springframework.stereotype.Service;
 

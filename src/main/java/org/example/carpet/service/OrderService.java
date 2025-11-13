@@ -4,12 +4,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.carpet.client.InventoryClient;
 import org.example.carpet.exception.InsufficientStockException;
+import org.example.carpet.exception.InvalidOrderStateException;
+import org.example.carpet.exception.OrderNotFoundException;
+import org.example.carpet.exception.UnauthorizedAccessException;
 import org.example.carpet.kafka.InventoryEventProducer;
 import org.example.carpet.model.OrderDocument;
 import org.example.carpet.model.OrderLineItem;
-import org.example.carpet.repository.mongo.ItemDocumentRepository;
 import org.example.carpet.repository.mongo.OrderRepository;
-import org.springframework.data.cassandra.core.CassandraOperations;
 import org.springframework.data.cassandra.core.CassandraTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
@@ -24,9 +25,9 @@ import java.util.UUID;
 
 /**
  * Order lifecycle:
- * - create (reserve = atomic deduct in Mongo)
+ * - create (reserve = atomic deduct via InventoryService)
  * - get
- * - cancel (restock in Mongo; best-effort external release)
+ * - cancel (restock via InventoryService; best-effort external release)
  * - markPaid
  * Cassandra 集成：
  * - 订单事件时间线：order_events_by_order (order_id, ts DESC, type, payload_json)
@@ -38,14 +39,12 @@ import java.util.UUID;
 public class OrderService {
 
     private final OrderRepository orderRepository;                 // Mongo: orders
-    private final ItemDocumentRepository itemRepo;                 // Mongo: items (tryDeduct/tryRestock)
+    private final InventoryService inventoryService;               // 库存服务（原子扣减/回补）
     private final InventoryEventProducer inventoryEventProducer;   // Kafka events
     private final InventoryClient inventoryClient;                 // 可选的外部库存服务（best-effort）
 
     // === Cassandra: 事件时间线 ===
     private final CassandraTemplate cassandraTemplate;
-    // === 复用已有库存服务，在其中写 Cassandra 预留 ===
-    private final InventoryService inventoryService;
 
     // ====== 新增：查询订单历史（分页，按 createdAt 倒序） ======
     public Page<OrderDocument> getOrderHistory(String customerEmail, int page, int size) {
@@ -62,14 +61,14 @@ public class OrderService {
      *  - 记录预留：inventory_reservations_*（TTL 15m）
      */
     public OrderDocument createOrder(String customerEmail, List<OrderLineItem> items) {
-        // 1) 逐条扣减（原子条件：stockQuantity >= qty）
+        // 1) 逐条扣减（原子条件：stockQuantity >= qty）- 通过 InventoryService
         List<OrderLineItem> deducted = new ArrayList<>();
         for (OrderLineItem line : items) {
-            int ok = itemRepo.tryDeduct(line.getSku(), line.getQuantity());
-            if (ok == 0) {
+            boolean reserved = inventoryService.reserve(line.getSku(), line.getQuantity());
+            if (!reserved) {
                 // 回补之前成功扣减的
                 for (OrderLineItem r : deducted) {
-                    try { itemRepo.tryRestock(r.getSku(), r.getQuantity()); } catch (Exception ignore) {}
+                    try { inventoryService.release(r.getSku(), r.getQuantity()); } catch (Exception ignore) {}
                 }
                 throw new InsufficientStockException(line.getSku(), line.getQuantity(), -1);
             }
@@ -121,7 +120,7 @@ public class OrderService {
 
     public OrderDocument getOrderByOrderId(String orderId) {
         return orderRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
     }
 
     /**
@@ -134,8 +133,8 @@ public class OrderService {
         }
 
         for (OrderLineItem line : order.getItems()) {
-            // 回补本地库存
-            try { itemRepo.tryRestock(line.getSku(), line.getQuantity()); } catch (Exception ignore) {}
+            // 回补本地库存 - 通过 InventoryService
+            try { inventoryService.release(line.getSku(), line.getQuantity()); } catch (Exception ignore) {}
 
             // 可选：外部库存释放（失败不影响主流程）
             try { inventoryClient.release(line.getSku(), line.getQuantity()); } catch (Exception ignore) {}
@@ -166,7 +165,7 @@ public class OrderService {
         }
 
         if (!"RESERVED".equals(order.getStatus())) {
-            throw new RuntimeException("Order not in RESERVED state, can't mark PAID.");
+            throw new InvalidOrderStateException(orderId, order.getStatus(), "RESERVED");
         }
         order.setStatus("PAID");
         order.setUpdatedAt(LocalDateTime.now());
@@ -190,12 +189,12 @@ public class OrderService {
 
         // 验证：只有订单所有者可以更新
         if (!order.getCustomerEmail().equals(requesterEmail)) {
-            throw new RuntimeException("You can only update your own orders");
+            throw new UnauthorizedAccessException(requesterEmail, "order " + orderId);
         }
 
         // 验证：只有 RESERVED 或 PAID 状态可以更新配送地址
         if (!"RESERVED".equals(order.getStatus()) && !"PAID".equals(order.getStatus())) {
-            throw new RuntimeException("Can only update shipping address for RESERVED or PAID orders");
+            throw new InvalidOrderStateException(orderId, order.getStatus(), "RESERVED or PAID");
         }
 
         order.setShippingAddress(address);

@@ -29,7 +29,7 @@ spring:
     listener:
       ack-mode: record
 
-  # 如果“当前阶段”不用 JPA/Postgres，建议先关掉 open-in-view（或直接移除JPA依赖，见下文POM）
+  # JPA/Hibernate configuration for PostgreSQL
   jpa:
     open-in-view: false
     hibernate:
@@ -37,6 +37,7 @@ spring:
     show-sql: true
     properties:
       hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
 
   cassandra:
@@ -46,18 +47,18 @@ spring:
     keyspace-name: yancarpet         # 你的 keyspace；没有就先建
     schema-action: create_if_not_exists
 
-  # 如需 Postgres，再开启 datasource；不用就先注释掉这块
+  # PostgreSQL configuration - Update with YOUR credentials
   datasource:
     url: jdbc:postgresql://localhost:5432/carpetdb
-    username: carpet
-    password: secret
+    username: postgres  # Your PostgreSQL username
+    password: secret  # PostgreSQL password!
     driver-class-name: org.postgresql.Driver
 
 logging:
   level:
     org.springframework.web: INFO
     org.springframework.data.mongodb.core.MongoTemplate: INFO
-    org.springframework.security: INFO
+    org.springframework.security: DEBUG
     org.example.carpet: DEBUG
     org.apache.kafka.clients.admin: WARN
     org.apache.kafka.clients.Metadata: WARN

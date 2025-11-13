@@ -68,6 +68,7 @@ public class JwtFilter extends OncePerRequestFilter {
             String header = request.getHeader(HttpHeaders.AUTHORIZATION);
             // 没有 Authorization 或不是 Bearer -> 放行（保持匿名态，由 SecurityConfig 决定是否允许）
             if (header == null || !header.startsWith("Bearer ")) {
+                log.debug("No JWT token found in request to: {} {}", request.getMethod(), request.getRequestURI());
                 chain.doFilter(request, response);
                 return;
             }

@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.example.carpet.dto.AccountCreateRequest;
 import org.example.carpet.dto.AccountUpdateRequest;
 import org.example.carpet.dto.AccountResponse;
+import org.example.carpet.exception.AccountNotFoundException;
+import org.example.carpet.exception.DuplicateEmailException;
 import org.example.carpet.model.Account;
 import org.example.carpet.repository.mongo.AccountRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -21,7 +23,7 @@ public class AccountService {
         final String email = normalizeEmail(req.getEmail());
 
         userRepo.findByEmail(email).ifPresent(u -> {
-            throw new RuntimeException("Email already in use");
+            throw new DuplicateEmailException(email);
         });
 
         Account doc = Account.builder()
@@ -39,8 +41,9 @@ public class AccountService {
 
     // ---------- Update my profile (不改密码) ----------
     public AccountResponse updateAccount(String emailFromToken, AccountUpdateRequest req) {
-        Account doc = userRepo.findByEmail(normalizeEmail(emailFromToken))
-                .orElseThrow(() -> new RuntimeException("Account not found"));
+        String email = normalizeEmail(emailFromToken);
+        Account doc = userRepo.findByEmail(email)
+                .orElseThrow(() -> new AccountNotFoundException(email));
 
         if (req.getUserName() != null)            doc.setUserName(req.getUserName());
         if (req.getShippingAddress() != null)     doc.setShippingAddress(req.getShippingAddress());
@@ -53,8 +56,9 @@ public class AccountService {
 
     // ---------- Lookup ----------
     public AccountResponse getMyAccount(String emailFromToken) {
-        Account doc = userRepo.findByEmail(normalizeEmail(emailFromToken))
-                .orElseThrow(() -> new RuntimeException("Account not found"));
+        String email = normalizeEmail(emailFromToken);
+        Account doc = userRepo.findByEmail(email)
+                .orElseThrow(() -> new AccountNotFoundException(email));
         return toResponse(doc);
     }
 

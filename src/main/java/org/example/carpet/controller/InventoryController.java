@@ -42,8 +42,8 @@ public class InventoryController {
     }
 
     @PostMapping("/release")
-    public void release(@RequestParam String sku, @RequestParam int quantity) {
-        inventoryService.release(sku, quantity);
+    public boolean release(@RequestParam String sku, @RequestParam int quantity) {
+        return inventoryService.release(sku, quantity);
     }
 
     // -------------------- Cassandra：预留辅助接口 --------------------

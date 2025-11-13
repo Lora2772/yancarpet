@@ -1,32 +1,30 @@
 package org.example.carpet.service;
 
 import lombok.RequiredArgsConstructor;
-import org.example.carpet.repository.InventoryRepository;
-import org.springframework.data.cassandra.core.CassandraOperations;
+import org.example.carpet.repository.mongo.ItemDocumentRepository;
 import org.springframework.data.cassandra.core.CassandraTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.data.cassandra.core.CassandraOperations;
-
 
 import java.time.Duration;
 
 /**
  * Handles stock availability and shipping promise.
- * For now, inventory is in-memory (InventoryRepository).
- * Later this can move to its own microservice + Kafka.
+ * Uses MongoDB (ItemDocumentRepository) for atomic inventory operations.
+ * Cassandra for reservation tracking with TTL.
  */
 @Service
 @RequiredArgsConstructor
 public class InventoryService {
 
-    private final InventoryRepository inventoryRepository;
+    private final ItemDocumentRepository itemRepository;
 
     // === Cassandra: 使用 CassandraTemplate 直写预留（行级 TTL） ===
     private final CassandraTemplate cassandraTemplate;
 
     // 查询库存 + 返回承诺运输时间
     public InventoryStatus checkInventory(String sku) {
-        int qty = inventoryRepository.getAvailableQuantity(sku);
+        var item = itemRepository.findBySku(sku);
+        int qty = item.map(i -> i.getStockQuantity() != null ? i.getStockQuantity() : 0).orElse(0);
         return InventoryStatus.builder()
                 .sku(sku)
                 .availableQuantity(qty)
@@ -36,14 +34,16 @@ public class InventoryService {
                 .build();
     }
 
-    // 锁库存（用于创建订单）
+    // 锁库存（用于创建订单）- 使用 MongoDB 原子操作
     public boolean reserve(String sku, int quantity) {
-        return inventoryRepository.reserve(sku, quantity);
+        int result = itemRepository.tryDeduct(sku, quantity);
+        return result == 1;
     }
 
-    // 释放库存（订单取消 / 支付失败）
-    public void release(String sku, int quantity) {
-        inventoryRepository.release(sku, quantity);
+    // 释放库存（订单取消 / 支付失败）- 使用 MongoDB 原子操作
+    public boolean release(String sku, int quantity) {
+        int result = itemRepository.tryRestock(sku, quantity);
+        return result == 1;
     }
 
     // ----------------------------------------------------------------------

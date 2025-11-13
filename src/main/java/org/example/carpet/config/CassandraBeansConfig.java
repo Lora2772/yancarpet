@@ -5,6 +5,7 @@ import java.net.InetSocketAddress;
 import com.datastax.oss.driver.api.core.CqlSession;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.cassandra.core.CassandraOperations;
 import org.springframework.data.cassandra.core.CassandraTemplate;
 import org.springframework.data.cassandra.core.convert.CassandraConverter;
@@ -13,8 +14,10 @@ import org.springframework.data.cassandra.core.mapping.CassandraMappingContext;
 
 /**
  * 手动注入 Cassandra 必要 Bean，确保有 cassandraTemplate / cassandraOperations 可注入
+ * Only active when NOT in test profile
  */
 @Configuration
+@Profile("!test")
 public class CassandraBeansConfig {
 
     @Bean
