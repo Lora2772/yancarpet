@@ -143,4 +143,70 @@ public class PaymentService {
         return paymentRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new PaymentNotFoundException(orderId));
     }
+
+    /**
+     * Update an existing payment record.
+     * Allows updating status, payment method, or amount.
+     * If status changes to SUCCESS, marks the order as PAID and creates ledger entry.
+     *
+     * @param orderId The order ID to update payment for
+     * @param newStatus Optional new status (PENDING, SUCCESS, FAILED)
+     * @param newPaymentMethod Optional new payment method
+     * @param newAmount Optional new amount
+     * @return Updated payment record
+     */
+    @Transactional
+    public PaymentRecord updatePayment(String orderId, String newStatus, String newPaymentMethod, Double newAmount) {
+        // Find existing payment
+        PaymentRecord payment = paymentRepository.findByOrderId(orderId)
+                .orElseThrow(() -> new PaymentNotFoundException(orderId));
+
+        String oldStatus = payment.getStatus();
+        boolean statusChanged = false;
+
+        // Update fields if provided
+        if (newStatus != null && !newStatus.isBlank()) {
+            payment.setStatus(newStatus);
+            statusChanged = !newStatus.equalsIgnoreCase(oldStatus);
+        }
+
+        if (newPaymentMethod != null && !newPaymentMethod.isBlank()) {
+            payment.setPaymentMethod(newPaymentMethod);
+        }
+
+        if (newAmount != null && newAmount > 0) {
+            payment.setAmount(newAmount);
+        }
+
+        // If status changed to SUCCESS, complete the payment flow
+        if (statusChanged && "SUCCESS".equalsIgnoreCase(payment.getStatus())) {
+            payment.setCompletedAt(LocalDateTime.now());
+
+            // Mark order as PAID
+            orderService.markPaid(orderId);
+
+            // Emit payment succeeded event
+            try {
+                paymentEventProducer.publishPaymentSucceeded(orderId, payment.getAmount());
+            } catch (Exception ignored) { /* log warning in production */ }
+
+            // Create immutable ledger entry
+            paymentLedgerRepository.save(
+                    PaymentLedgerEntity.builder()
+                            .orderId(orderId)
+                            .amountUsd(payment.getAmount())
+                            .paymentMethod(payment.getPaymentMethod())
+                            .status("SUCCESS")
+                            .recordedAt(LocalDateTime.now())
+                            .build()
+            );
+        }
+
+        // If status changed to FAILED, set completed timestamp
+        if (statusChanged && "FAILED".equalsIgnoreCase(payment.getStatus())) {
+            payment.setCompletedAt(LocalDateTime.now());
+        }
+
+        return paymentRepository.save(payment);
+    }
 }

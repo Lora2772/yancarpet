@@ -3,6 +3,7 @@ package org.example.carpet.controller;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.carpet.dto.UpdatePaymentRequest;
 import org.example.carpet.model.PaymentRecord;
 import org.example.carpet.service.PaymentService;
 import org.springframework.web.bind.annotation.*;
@@ -17,6 +18,13 @@ import org.springframework.web.bind.annotation.*;
  *
  * - GET /payments/status/{orderId}
  *      查询订单的支付状态（PENDING / SUCCESS / FAILED）
+ *
+ * - PUT /payments/{orderId}
+ *      更新支付记录（状态、支付方式、金额）
+ *      如果状态变为 SUCCESS，会触发订单状态更新为 PAID 并创建账本记录
+ *
+ * - POST /payments/refund
+ *      退款操作，将订单状态标记为 REFUNDED 并创建负金额账本记录
  *
  * 备注：
  *   将来可以扩展 "WECHAT_QR" / "ALIPAY_QR"：
@@ -56,6 +64,21 @@ public class PaymentController {
         return paymentService.refundPayment(
                 request.getOrderId(),
                 request.getReason()
+        );
+    }
+
+    // Update Payment
+    @PutMapping("/{orderId}")
+    public PaymentRecord updatePayment(
+            @PathVariable String orderId,
+            @RequestBody UpdatePaymentRequest request) {
+        log.info("Payment update received for orderId: {}, newStatus: {}, newMethod: {}, newAmount: {}",
+                orderId, request.getStatus(), request.getPaymentMethod(), request.getAmount());
+        return paymentService.updatePayment(
+                orderId,
+                request.getStatus(),
+                request.getPaymentMethod(),
+                request.getAmount()
         );
     }
 
