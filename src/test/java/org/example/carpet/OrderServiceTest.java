@@ -1,6 +1,5 @@
 package org.example.carpet.service;
 
-import org.example.carpet.client.InventoryClient;
 import org.example.carpet.kafka.InventoryEventProducer;
 import org.example.carpet.model.OrderDocument;
 import org.example.carpet.model.OrderLineItem;
@@ -25,7 +24,6 @@ class OrderServiceTest {
     @Mock OrderRepository orderRepository;                   // Mongo: orders
     @Mock InventoryService inventoryService;                 // 库存服务（原子扣减/回补）
     @Mock InventoryEventProducer inventoryEventProducer;     // Kafka
-    @Mock InventoryClient inventoryClient;                   // 外部库存（取消时 best-effort 释放）
     @Mock CassandraTemplate cassandraTemplate;               // Cassandra 事件时间线
 
     @InjectMocks OrderService orderService;
@@ -52,12 +50,10 @@ class OrderServiceTest {
         verify(orderRepository).save(any(OrderDocument.class));
         // 事件发送（失败不回滚，这里只验证被调用）
         verify(inventoryEventProducer).publishInventoryReserved(anyString(), eq("RUG-RED"), eq(2));
-        // 不再验证 inventoryClient.reserve —— 当前代码路径未调用它
-        verifyNoMoreInteractions(inventoryClient);
     }
 
     @Test
-    void cancelOrder_shouldRestockAndMarkCancelled_andTryExternalRelease() {
+    void cancelOrder_shouldRestockAndMarkCancelled() {
         OrderLineItem lineItem = OrderLineItem.builder()
                 .sku("RUG-RED")
                 .quantity(2)
@@ -82,8 +78,5 @@ class OrderServiceTest {
         verify(inventoryService).release("RUG-RED", 2);
         verify(orderRepository).save(any(OrderDocument.class));
         verify(inventoryEventProducer).publishInventoryReleased(eq("ORD-abc"), eq("RUG-RED"), eq(2));
-
-        // 外部库存服务也会被调用（best-effort）
-        verify(inventoryClient).release("RUG-RED", 2);
     }
 }

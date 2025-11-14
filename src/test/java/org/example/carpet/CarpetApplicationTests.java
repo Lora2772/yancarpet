@@ -57,6 +57,13 @@ class CarpetApplicationTests {
     // Mock Cassandra dependencies
     @MockBean private CassandraTemplate cassandraTemplate;
     @MockBean private CartItemRepo cartItemRepo;
+    @MockBean private org.example.carpet.cassandra.repos.InventoryReservationByOrderRepo inventoryReservationByOrderRepo;
+    @MockBean private org.example.carpet.cassandra.repos.InventoryReservationBySkuRepo inventoryReservationBySkuRepo;
+    @MockBean private org.example.carpet.cassandra.repos.OrderEventRepo orderEventRepo;
+    @MockBean private org.example.carpet.cassandra.ShipmentEventRepository shipmentEventRepository;
+
+    // Mock Security dependencies
+    @MockBean private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     @Test
     void contextLoads() {

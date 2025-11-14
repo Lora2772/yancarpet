@@ -27,6 +27,9 @@ class AccountServiceTest {
     @Mock
     AccountRepository userRepo;
 
+    @Mock
+    org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+
     @InjectMocks
     AccountService accountService;
 
@@ -54,6 +57,9 @@ class AccountServiceTest {
 
         when(userRepo.findByEmail("buyer@yancarpet.com"))
                 .thenReturn(Optional.empty());
+
+        when(passwordEncoder.encode("pw123"))
+                .thenReturn("$2a$10$encodedHash");
 
         when(userRepo.save(any(Account.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
@@ -124,7 +130,93 @@ class AccountServiceTest {
                 .passwordHash("{plain}secret")
                 .build();
 
+        // Mock encoder.encode for plain password migration
+        when(passwordEncoder.encode("secret")).thenReturn("$2a$10$newHash");
+        when(userRepo.save(any(Account.class))).thenAnswer(inv -> inv.getArgument(0));
+
         assertTrue(accountService.passwordMatches(user, "secret"));
-        assertFalse(accountService.passwordMatches(user, "wrong"));
+
+        // Reset mocks for second call
+        Account user2 = Account.builder()
+                .email("abc@test.com")
+                .passwordHash("{plain}secret")
+                .build();
+
+        assertFalse(accountService.passwordMatches(user2, "wrong"));
+    }
+
+    @Test
+    void createAccount_duplicateEmail_shouldThrowException() {
+        // Arrange
+        AccountCreateRequest req = new AccountCreateRequest();
+        req.setEmail("duplicate@yancarpet.com");
+        req.setUserName("Test User");
+        req.setPassword("password");
+
+        Account existing = Account.builder()
+                .email("duplicate@yancarpet.com")
+                .userName("Existing User")
+                .build();
+
+        when(userRepo.findByEmail("duplicate@yancarpet.com"))
+                .thenReturn(Optional.of(existing));
+
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> {
+            accountService.createAccount(req);
+        });
+
+        verify(userRepo, never()).save(any(Account.class));
+    }
+
+    @Test
+    void updateAccount_nonExistentUser_shouldThrowException() {
+        // Arrange
+        AccountUpdateRequest req = new AccountUpdateRequest();
+        req.setUserName("New Name");
+
+        when(userRepo.findByEmail("nonexistent@test.com"))
+                .thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> {
+            accountService.updateAccount("nonexistent@test.com", req);
+        });
+    }
+
+    @Test
+    void getMyAccount_nonExistentUser_shouldThrowException() {
+        // Arrange
+        when(userRepo.findByEmail("nonexistent@test.com"))
+                .thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> {
+            accountService.getMyAccount("nonexistent@test.com");
+        });
+    }
+
+    @Test
+    void passwordMatches_nullPassword_shouldReturnFalse() {
+        // Arrange
+        Account user = Account.builder()
+                .email("test@test.com")
+                .passwordHash("{plain}secret")
+                .build();
+
+        // Act & Assert
+        assertFalse(accountService.passwordMatches(user, null));
+    }
+
+    @Test
+    void passwordMatches_emptyPassword_shouldReturnFalse() {
+        // Arrange
+        Account user = Account.builder()
+                .email("test@test.com")
+                .passwordHash("{plain}secret")
+                .build();
+
+        // Act & Assert
+        assertFalse(accountService.passwordMatches(user, ""));
     }
 }

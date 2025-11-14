@@ -132,4 +132,140 @@ class PaymentServiceTest {
         assertEquals("CARD", out.getPaymentMethod());
         assertEquals(100.00, out.getAmount(), 1e-6);
     }
+
+    @Test
+    void getPaymentStatus_notFound_shouldThrowException() {
+        when(paymentRepository.findByOrderId("ORD-nonexistent"))
+                .thenReturn(Optional.empty());
+
+        assertThrows(RuntimeException.class, () -> {
+            paymentService.getPaymentStatus("ORD-nonexistent");
+        });
+    }
+
+    @Test
+    void submitPayment_nonCardMethod_shouldCreatePending() {
+        when(paymentRepository.save(any(PaymentRecord.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        PaymentRecord rec = paymentService.submitPayment("ORD-456", "ALIPAY", 299.00);
+
+        assertEquals("ORD-456", rec.getOrderId());
+        assertEquals("ALIPAY", rec.getPaymentMethod());
+        assertEquals("PENDING", rec.getStatus());
+
+        // Should not mark order paid or emit events for pending payment
+        verify(orderService, never()).markPaid(anyString());
+        verify(paymentEventProducer, never()).publishPaymentSucceeded(anyString(), anyDouble());
+        verify(paymentLedgerRepository, never()).save(any());
+    }
+
+    @Test
+    void refundPayment_nonSuccessfulPayment_shouldThrowException() {
+        PaymentRecord pendingRecord = PaymentRecord.builder()
+                .orderId("ORD-pending")
+                .status("PENDING")
+                .build();
+
+        when(paymentRepository.findByOrderId("ORD-pending"))
+                .thenReturn(Optional.of(pendingRecord));
+
+        assertThrows(RuntimeException.class, () -> {
+            paymentService.refundPayment("ORD-pending", "reason");
+        });
+    }
+
+    @Test
+    void refundPayment_paymentNotFound_shouldThrowException() {
+        when(paymentRepository.findByOrderId("ORD-notfound"))
+                .thenReturn(Optional.empty());
+
+        assertThrows(RuntimeException.class, () -> {
+            paymentService.refundPayment("ORD-notfound", "reason");
+        });
+    }
+
+    @Test
+    void updatePayment_changeStatusToSuccess_shouldMarkOrderPaid() {
+        PaymentRecord existing = PaymentRecord.builder()
+                .orderId("ORD-update")
+                .status("PENDING")
+                .paymentMethod("WECHAT")
+                .amount(150.00)
+                .build();
+
+        when(paymentRepository.findByOrderId("ORD-update"))
+                .thenReturn(Optional.of(existing));
+
+        when(paymentRepository.save(any(PaymentRecord.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        when(orderService.markPaid("ORD-update"))
+                .thenReturn(OrderDocument.builder().orderId("ORD-update").status("PAID").build());
+
+        when(paymentLedgerRepository.save(any(PaymentLedgerEntity.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        PaymentRecord updated = paymentService.updatePayment("ORD-update", "SUCCESS", null, null);
+
+        assertEquals("SUCCESS", updated.getStatus());
+        assertNotNull(updated.getCompletedAt());
+        verify(orderService).markPaid("ORD-update");
+        verify(paymentEventProducer).publishPaymentSucceeded("ORD-update", 150.00);
+        verify(paymentLedgerRepository).save(any(PaymentLedgerEntity.class));
+    }
+
+    @Test
+    void updatePayment_changeStatusToFailed_shouldSetCompletedAt() {
+        PaymentRecord existing = PaymentRecord.builder()
+                .orderId("ORD-fail")
+                .status("PENDING")
+                .paymentMethod("CARD")
+                .amount(100.00)
+                .build();
+
+        when(paymentRepository.findByOrderId("ORD-fail"))
+                .thenReturn(Optional.of(existing));
+
+        when(paymentRepository.save(any(PaymentRecord.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        PaymentRecord updated = paymentService.updatePayment("ORD-fail", "FAILED", null, null);
+
+        assertEquals("FAILED", updated.getStatus());
+        assertNotNull(updated.getCompletedAt());
+        verify(orderService, never()).markPaid(anyString());
+    }
+
+    @Test
+    void updatePayment_changeAmountAndMethod_shouldUpdate() {
+        PaymentRecord existing = PaymentRecord.builder()
+                .orderId("ORD-change")
+                .status("PENDING")
+                .paymentMethod("CARD")
+                .amount(100.00)
+                .build();
+
+        when(paymentRepository.findByOrderId("ORD-change"))
+                .thenReturn(Optional.of(existing));
+
+        when(paymentRepository.save(any(PaymentRecord.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        PaymentRecord updated = paymentService.updatePayment("ORD-change", null, "ALIPAY", 200.00);
+
+        assertEquals("ALIPAY", updated.getPaymentMethod());
+        assertEquals(200.00, updated.getAmount());
+        assertEquals("PENDING", updated.getStatus()); // Status unchanged
+    }
+
+    @Test
+    void updatePayment_notFound_shouldThrowException() {
+        when(paymentRepository.findByOrderId("ORD-missing"))
+                .thenReturn(Optional.empty());
+
+        assertThrows(RuntimeException.class, () -> {
+            paymentService.updatePayment("ORD-missing", "SUCCESS", null, null);
+        });
+    }
 }

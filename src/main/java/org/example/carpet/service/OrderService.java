@@ -2,7 +2,6 @@ package org.example.carpet.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.example.carpet.client.InventoryClient;
 import org.example.carpet.exception.InsufficientStockException;
 import org.example.carpet.exception.InvalidOrderStateException;
 import org.example.carpet.exception.OrderNotFoundException;
@@ -27,7 +26,7 @@ import java.util.UUID;
  * Order lifecycle:
  * - create (reserve = atomic deduct via InventoryService)
  * - get
- * - cancel (restock via InventoryService; best-effort external release)
+ * - cancel (restock via InventoryService)
  * - markPaid
  * Cassandra 集成：
  * - 订单事件时间线：order_events_by_order (order_id, ts DESC, type, payload_json)
@@ -41,7 +40,6 @@ public class OrderService {
     private final OrderRepository orderRepository;                 // Mongo: orders
     private final InventoryService inventoryService;               // 库存服务（原子扣减/回补）
     private final InventoryEventProducer inventoryEventProducer;   // Kafka events
-    private final InventoryClient inventoryClient;                 // 可选的外部库存服务（best-effort）
 
     // === Cassandra: 事件时间线 ===
     private final CassandraTemplate cassandraTemplate;
@@ -135,9 +133,6 @@ public class OrderService {
         for (OrderLineItem line : order.getItems()) {
             // 回补本地库存 - 通过 InventoryService
             try { inventoryService.release(line.getSku(), line.getQuantity()); } catch (Exception ignore) {}
-
-            // 可选：外部库存释放（失败不影响主流程）
-            try { inventoryClient.release(line.getSku(), line.getQuantity()); } catch (Exception ignore) {}
         }
 
         // Cassandra 事件
