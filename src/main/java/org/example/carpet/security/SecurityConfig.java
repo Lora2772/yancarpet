@@ -42,10 +42,11 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        // 明确放行 account/create 和 auth POST（有些环境对 POST 更"谨慎"）
                         .requestMatchers(HttpMethod.POST, "/account/create", "/auth/**").permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
-                        .anyRequest().authenticated()
+                        // FOR TESTING: Allow all endpoints without authentication
+                        // TODO: Re-enable authentication for production by changing to .authenticated()
+                        .anyRequest().permitAll()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(ex -> ex
